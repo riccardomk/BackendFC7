@@ -88,6 +88,10 @@ app.post('/market/:username', (req, res) => {
   const { credits, selected, confirmed } = req.body;
   if (!username) return res.status(400).json({ error: 'Username mancante' });
   let data = loadMarketData();
+  // Se già confermato, non permettere modifiche
+  if (data.users[username] && data.users[username].confirmed) {
+    return res.status(403).json({ error: 'Mercato già confermato, non modificabile' });
+  }
   data.users[username] = { credits, selected, confirmed };
   saveMarketData(data);
   res.json({ ok: true });
