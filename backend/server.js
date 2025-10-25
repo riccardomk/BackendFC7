@@ -32,6 +32,10 @@ app.post('/login', (req, res) => {
 });
 
 // Register
+
+app.use(cors());
+app.use(express.json({ limit: '10mb' }));
+
 app.post('/register', (req, res) => {
   const { name, email, password } = req.body;
   if (!name || !email || !password) return res.status(400).json({ error: 'Tutti i campi sono obbligatori' });
@@ -43,8 +47,6 @@ app.post('/register', (req, res) => {
   saveDb(db);
   res.json({ user: newUser });
 });
-app.use(cors());
-app.use(express.json({ limit: '10mb' }));
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
