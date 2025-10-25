@@ -1,3 +1,35 @@
+
+// --- RANKING ---
+const RANKING_FILE = path.join(__dirname, 'ranking-data.json');
+function loadRankingData() {
+  if (!fs.existsSync(RANKING_FILE)) return { global: {}, weekly: {} };
+  return JSON.parse(fs.readFileSync(RANKING_FILE, 'utf8'));
+}
+function saveRankingData(data) {
+  fs.writeFileSync(RANKING_FILE, JSON.stringify(data, null, 2));
+}
+
+// Calcolo punteggi e differenza reti per una giornata
+// results: oggetto { clubName: { gf: gol fatti, gs: gol subiti, esito: 'W'|'D'|'L' } }
+function calcolaPunteggioGiornata(clubsSchierati, results) {
+  let punti = 0;
+  let golFatti = 0;
+  let golSubiti = 0;
+  for (const club of clubsSchierati) {
+    const res = results[club];
+    if (!res) continue;
+    // Punti classifica
+    if (res.esito === 'W') punti += 3;
+    else if (res.esito === 'D') punti += 1;
+    // Gol fatti/subiti
+    golFatti += res.gf;
+    golSubiti += res.gs;
+  }
+  const diffReti = golFatti - golSubiti;
+  return { punti, golFatti, golSubiti, diffReti };
+}
+
+// Tutte le route ranking DOPO la creazione di app
 // GET /ranking/global - restituisce la classifica globale ordinata
 app.get('/ranking/global', (req, res) => {
   const ranking = loadRankingData();
@@ -24,6 +56,7 @@ app.get('/ranking/weekly/:week', (req, res) => {
   });
   res.json(arr);
 });
+
 // Aggiorna ranking per una giornata
 // POST /update-ranking
 // Body: { username, clubsSchierati: [club1, ...], results: { clubName: { gf, gs, esito } }, week }
@@ -44,34 +77,6 @@ app.post('/update-ranking', (req, res) => {
   saveRankingData(ranking);
   res.json({ ok: true, giornata, globale: ranking.global[username] });
 });
-// Calcolo punteggi e differenza reti per una giornata
-// results: oggetto { clubName: { gf: gol fatti, gs: gol subiti, esito: 'W'|'D'|'L' } }
-function calcolaPunteggioGiornata(clubsSchierati, results) {
-  let punti = 0;
-  let golFatti = 0;
-  let golSubiti = 0;
-  for (const club of clubsSchierati) {
-    const res = results[club];
-    if (!res) continue;
-    // Punti classifica
-    if (res.esito === 'W') punti += 3;
-    else if (res.esito === 'D') punti += 1;
-    // Gol fatti/subiti
-    golFatti += res.gf;
-    golSubiti += res.gs;
-  }
-  const diffReti = golFatti - golSubiti;
-  return { punti, golFatti, golSubiti, diffReti };
-}
-// --- RANKING ---
-const RANKING_FILE = path.join(__dirname, 'ranking-data.json');
-function loadRankingData() {
-  if (!fs.existsSync(RANKING_FILE)) return { global: {}, weekly: {} };
-  return JSON.parse(fs.readFileSync(RANKING_FILE, 'utf8'));
-}
-function saveRankingData(data) {
-  fs.writeFileSync(RANKING_FILE, JSON.stringify(data, null, 2));
-}
 
 import express from 'express';
 import cors from 'cors';
