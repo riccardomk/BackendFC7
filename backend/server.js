@@ -145,6 +145,13 @@ app.post('/update-ranking', (req, res) => {
 app.post('/market/:username', (req, res) => {
   const username = req.params.username;
   const { credits, selected, confirmed } = req.body;
+  console.log('DEBUG BACKEND /market:', {
+    username,
+    credits,
+    selected,
+    confirmed,
+    body: req.body
+  });
   if (!username) return res.status(400).json({ error: 'Username mancante' });
   let data = loadMarketData();
   if (data.users[username] && data.users[username].confirmed) {
