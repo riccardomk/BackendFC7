@@ -9,6 +9,10 @@ import { fileURLToPath } from 'url';
 
 
 
+// ===== __filename e __dirname =====
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 // Import dinamico di fetch SOLO dopo che path è definito
 let fetch;
 try {
@@ -128,9 +132,7 @@ function getNextCommonWeekAndFirstMatch() {
   return { week: next.week, firstMatch };
 }
 
-// ===== __filename e __dirname =====
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+
 
 // ===== COSTANTI FILE =====
 const RANKING_FILE = path.join(__dirname, 'ranking-data.json');
