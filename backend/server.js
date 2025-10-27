@@ -232,6 +232,23 @@ app.post('/formation/:userId', (req, res) => {
     timestamp: new Date().toISOString()
   };
   saveFormationData(formationData);
+
+  // LOGICA MEDIA PUNTI DI UFFICIO SOLO PER NUOVI UTENTI E CLASSIFICA ESISTENTE
+  const ranking = loadRankingData();
+  const utentiClassifica = Object.keys(ranking.global);
+  // Se la classifica ha già utenti e l'utente non è presente
+  if (utentiClassifica.length > 0 && !ranking.global[userId]) {
+    // Calcola la media punti
+    const somma = utentiClassifica.reduce((acc, u) => acc + (ranking.global[u].punti || 0), 0);
+    const media = Math.round(somma / utentiClassifica.length);
+    ranking.global[userId] = {
+      punti: media,
+      golFatti: 0,
+      golSubiti: 0,
+      diffReti: 0
+    };
+    saveRankingData(ranking);
+  }
   res.json({ ok: true, starters });
 });
 
