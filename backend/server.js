@@ -235,6 +235,16 @@ app.post('/formation/:userId', (req, res) => {
   res.json({ ok: true, starters });
 });
 
+// Route GET per recuperare la formazione confermata di un utente
+app.get('/formation/:userId', (req, res) => {
+  const userId = req.params.userId;
+  const formationData = loadFormationData();
+  if (!formationData[userId]) {
+    return res.status(404).json({ error: 'Nessuna formazione confermata trovata' });
+  }
+  res.json(formationData[userId]);
+});
+
 // ===== AVVIO SERVER =====
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
