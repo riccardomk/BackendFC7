@@ -1,3 +1,4 @@
+
 // ===== IMPORTS ALL'INIZIO =====
 import express from 'express';
 import cors from 'cors';
@@ -5,7 +6,6 @@ import { v2 as cloudinary } from 'cloudinary';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-
 // Import dinamico di fetch SOLO dopo che path è definito
 let fetch;
 try {
@@ -16,7 +16,6 @@ try {
   execSync('npm install node-fetch@3', { stdio: 'inherit' });
   fetch = (await import('node-fetch')).default;
 }
-
 const CALENDAR_FILES = {
   'Serie A': path.join(__dirname, 'calendar-seriea.json'),
   'Premier League': path.join(__dirname, 'calendar-premier.json'),
@@ -24,7 +23,6 @@ const CALENDAR_FILES = {
   'Bundesliga': path.join(__dirname, 'calendar-bundesliga.json'),
   'Ligue 1': path.join(__dirname, 'calendar-ligue1.json'),
 };
-
 const FOOTBALL_DATA_API = 'https://api.football-data.org/v4/competitions';
 const FOOTBALL_DATA_CODES = {
   'Serie A': 'SA',
@@ -34,7 +32,6 @@ const FOOTBALL_DATA_CODES = {
   'Ligue 1': 'FL1',
 };
 const FOOTBALL_DATA_TOKEN = process.env.FOOTBALL_DATA_TOKEN || '81ed2d1e396e4164b91e079b249038df';
-
 async function fetchCalendar(league, file) {
   const code = FOOTBALL_DATA_CODES[league];
   if (!code) return [];
@@ -65,7 +62,6 @@ async function fetchCalendar(league, file) {
     return [];
   }
 }
-
 async function loadCalendari() {
   const calendari = {};
   for (const [league, file] of Object.entries(CALENDAR_FILES)) {
@@ -78,13 +74,11 @@ async function loadCalendari() {
   }
   return calendari;
 }
-
 // Caricamento asincrono all'avvio
 let CALENDARI = {};
 await (async () => {
   CALENDARI = await loadCalendari();
 })();
-
 // Funzione di controllo per segnalare se manca una settimana comune
 function checkCalendariCommonWeek() {
   const weeks = {};
@@ -103,10 +97,8 @@ function checkCalendariCommonWeek() {
     console.log('Prossima settimana comune disponibile per la formazione:', next);
   }
 }
-
 // Controllo all’avvio del server
 checkCalendariCommonWeek();
-
 // Trova la prossima settimana comune e la prima partita (solo se tutte le leghe hanno la giornata)
 function getNextCommonWeekAndFirstMatch() {
   // Trova la prossima settimana comune
@@ -131,13 +123,6 @@ function getNextCommonWeekAndFirstMatch() {
   const firstMatch = new Date(next.dates.sort()[0]);
   return { week: next.week, firstMatch };
 }
-// ===== IMPORTS ALL'INIZIO =====
-import express from 'express';
-import cors from 'cors';
-import { v2 as cloudinary } from 'cloudinary';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 
 // ===== __filename e __dirname =====
 const __filename = fileURLToPath(import.meta.url);
