@@ -1,7 +1,6 @@
 
 // ===== CALENDARI CAMPIONATI (caricamento automatico da file JSON reali) =====
-import fs from 'fs';
-import path from 'path';
+// ...existing code...
 import fetch from 'node-fetch';
 
 const CALENDAR_FILES = {
@@ -119,8 +118,6 @@ function getNextAnyWeekAndFirstMatch() {
 import express from 'express';
 import cors from 'cors';
 import { v2 as cloudinary } from 'cloudinary';
-import fs from 'fs';
-import path from 'path';
 import { fileURLToPath } from 'url';
 
 // ===== __filename e __dirname =====
