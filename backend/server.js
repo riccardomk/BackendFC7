@@ -1,7 +1,6 @@
+
 // ===== CALENDARI CAMPIONATI (esempio statico, da aggiornare con le date reali) =====
 const CALENDARI = {
-// ...dopo tutte le altre route...
-
   'Serie A': [
     { week: 10, date: '2025-10-28T18:00:00Z' },
     // ...altre giornate...
@@ -23,6 +22,28 @@ const CALENDARI = {
     // ...altre giornate...
   ]
 };
+
+// Funzione di controllo per segnalare se manca una settimana comune
+function checkCalendariCommonWeek() {
+  const weeks = {};
+  for (const league in CALENDARI) {
+    for (const g of CALENDARI[league]) {
+      if (!weeks[g.week]) weeks[g.week] = [];
+      weeks[g.week].push(league);
+    }
+  }
+  const totalLeagues = Object.keys(CALENDARI).length;
+  const commonWeeks = Object.entries(weeks).filter(([week, leagues]) => leagues.length === totalLeagues);
+  if (commonWeeks.length === 0) {
+    console.warn('ATTENZIONE: Nessuna settimana comune tra i calendari! Nessuno potrà inviare la formazione finché non allinei le giornate.');
+  } else {
+    const next = commonWeeks[0][0];
+    console.log('Prossima settimana comune disponibile per la formazione:', next);
+  }
+}
+
+// Controllo all’avvio del server
+checkCalendariCommonWeek();
 
 function getNextCommonWeekAndFirstMatch() {
   // Trova la prossima settimana in cui tutti i campionati hanno una giornata
