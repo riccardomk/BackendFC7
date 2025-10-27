@@ -1,83 +1,27 @@
 
-// ===== CALENDARI CAMPIONATI (caricamento automatico da file JSON reali) =====
-// ...existing code...
-let fetch;
-try {
-  fetch = (await import('node-fetch')).default;
-} catch (e) {
-  console.error("node-fetch non trovato, provo a installarlo...");
-  const { execSync } = await import('child_process');
-  execSync('npm install node-fetch@3', { stdio: 'inherit' });
-  fetch = (await import('node-fetch')).default;
-}
-
-const CALENDAR_FILES = {
-  'Serie A': path.join(__dirname, 'calendar-seriea.json'),
-  'Premier League': path.join(__dirname, 'calendar-premier.json'),
-  'LaLiga': path.join(__dirname, 'calendar-laliga.json'),
-  'Bundesliga': path.join(__dirname, 'calendar-bundesliga.json'),
-  'Ligue 1': path.join(__dirname, 'calendar-ligue1.json'),
+// ===== CALENDARI CAMPIONATI (esempio statico, da aggiornare con le date reali) =====
+const CALENDARI = {
+  'Serie A': [
+    { week: 10, date: '2025-10-28T18:00:00Z' },
+    // ...altre giornate...
+  ],
+  'Premier League': [
+    { week: 10, date: '2025-10-28T20:00:00Z' },
+    // ...altre giornate...
+  ],
+  'LaLiga': [
+    { week: 10, date: '2025-10-28T21:00:00Z' },
+    // ...altre giornate...
+  ],
+  'Bundesliga': [
+    { week: 10, date: '2025-10-28T19:00:00Z' },
+    // ...altre giornate...
+  ],
+  'Ligue 1': [
+    { week: 10, date: '2025-10-28T18:30:00Z' },
+    // ...altre giornate...
+  ]
 };
-
-const FOOTBALL_DATA_API = 'https://api.football-data.org/v4/competitions';
-const FOOTBALL_DATA_CODES = {
-  'Serie A': 'SA',
-  'Premier League': 'PL',
-  'LaLiga': 'PD',
-  'Bundesliga': 'BL1',
-  'Ligue 1': 'FL1',
-};
-const FOOTBALL_DATA_TOKEN = process.env.FOOTBALL_DATA_TOKEN || '81ed2d1e396e4164b91e079b249038df';
-
-async function fetchCalendar(league, file) {
-  const code = FOOTBALL_DATA_CODES[league];
-  if (!code) return [];
-  try {
-    const res = await fetch(`${FOOTBALL_DATA_API}/${code}/matches?season=2025`, {
-      headers: { 'X-Auth-Token': FOOTBALL_DATA_TOKEN }
-    });
-    if (!res.ok) throw new Error('API error');
-    const data = await res.json();
-    // Estrarre week e date
-    const matches = data.matches || [];
-    // Raggruppa per giornata
-    const byWeek = {};
-    for (const m of matches) {
-      if (!byWeek[m.matchday]) byWeek[m.matchday] = [];
-      byWeek[m.matchday].push(m.utcDate);
-    }
-    // Per ogni giornata, prendi la data più vicina (prima partita)
-    const result = Object.entries(byWeek).map(([week, dates]) => ({
-      week: parseInt(week),
-      date: dates.sort()[0]
-    }));
-    // Salva su file
-    fs.writeFileSync(file, JSON.stringify(result, null, 2));
-    return result;
-  } catch (e) {
-    console.error('Errore fetch calendario', league, e.message);
-    return [];
-  }
-}
-
-async function loadCalendari() {
-  const calendari = {};
-  for (const [league, file] of Object.entries(CALENDAR_FILES)) {
-    if (fs.existsSync(file)) {
-      calendari[league] = JSON.parse(fs.readFileSync(file, 'utf8'));
-    } else {
-      // Scarica e crea file se mancante
-      calendari[league] = await fetchCalendar(league, file);
-    }
-  }
-  return calendari;
-}
-
-// Caricamento asincrono all'avvio
-let CALENDARI = {};
-await (async () => {
-  CALENDARI = await loadCalendari();
-})();
 
 // Funzione di controllo per segnalare se manca una settimana comune
 function checkCalendariCommonWeek() {
@@ -126,6 +70,8 @@ function getNextAnyWeekAndFirstMatch() {
 import express from 'express';
 import cors from 'cors';
 import { v2 as cloudinary } from 'cloudinary';
+import fs from 'fs';
+import path from 'path';
 import { fileURLToPath } from 'url';
 
 // ===== __filename e __dirname =====
