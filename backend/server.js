@@ -103,7 +103,16 @@ app.post('/register', (req, res) => {
 // ===== ROUTE RANKING =====
 app.get('/ranking/global', (req, res) => {
   const ranking = loadRankingData();
-  const arr = Object.entries(ranking.global).map(([username, stats]) => ({ username, ...stats }));
+  const db = loadDb();
+  // Unisci tutti gli utenti registrati con quelli che hanno punti
+  const allUsernames = Array.from(new Set([
+    ...db.users.map(u => u.name),
+    ...Object.keys(ranking.global)
+  ]));
+  const arr = allUsernames.map(username => {
+    const stats = ranking.global[username] || { punti: 0, golFatti: 0, golSubiti: 0, diffReti: 0 };
+    return { username, ...stats };
+  });
   arr.sort((a, b) => {
     if (b.punti !== a.punti) return b.punti - a.punti;
     if (b.diffReti !== a.diffReti) return b.diffReti - a.diffReti;
