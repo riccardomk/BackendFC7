@@ -6,6 +6,9 @@ import { v2 as cloudinary } from 'cloudinary';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
+
+
 // Import dinamico di fetch SOLO dopo che path è definito
 let fetch;
 try {
@@ -16,6 +19,7 @@ try {
   execSync('npm install node-fetch@3', { stdio: 'inherit' });
   fetch = (await import('node-fetch')).default;
 }
+
 const CALENDAR_FILES = {
   'Serie A': path.join(__dirname, 'calendar-seriea.json'),
   'Premier League': path.join(__dirname, 'calendar-premier.json'),
