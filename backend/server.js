@@ -1,27 +1,4 @@
 // ...existing code...
-// ...existing code...
-// ===== ROUTE FORMAZIONE (CONFERMA TITOLARI) =====
-app.post('/formation/:username', (req, res) => {
-  const username = req.params.username;
-  const { starters, confirmed } = req.body;
-  if (!username) return res.status(400).json({ error: 'Username mancante' });
-  if (!Array.isArray(starters) || starters.length !== 11) {
-    return res.status(400).json({ error: 'Devi schierare esattamente 11 titolari' });
-  }
-  let data = loadMarketData();
-  // Blocca solo la formazione se già confermata
-  if (data.users[username] && data.users[username].formationConfirmed) {
-    return res.status(403).json({ error: 'Formazione già confermata, non modificabile' });
-  }
-  // Aggiorna solo la formazione titolare e il flag di conferma formazione
-  data.users[username] = {
-    ...data.users[username],
-    starters,
-    formationConfirmed: confirmed
-  };
-  saveMarketData(data);
-  res.json({ ok: true });
-});
 
 
 // ===== IMPORTS ALL'INIZIO =====
@@ -218,4 +195,27 @@ app.get('/profile-pic/:username', (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server avviato sulla porta ${PORT}`);
+});
+
+// ===== ROUTE FORMAZIONE (CONFERMA TITOLARI) =====
+app.post('/formation/:username', (req, res) => {
+  const username = req.params.username;
+  const { starters, confirmed } = req.body;
+  if (!username) return res.status(400).json({ error: 'Username mancante' });
+  if (!Array.isArray(starters) || starters.length !== 11) {
+    return res.status(400).json({ error: 'Devi schierare esattamente 11 titolari' });
+  }
+  let data = loadMarketData();
+  // Blocca solo la formazione se già confermata
+  if (data.users[username] && data.users[username].formationConfirmed) {
+    return res.status(403).json({ error: 'Formazione già confermata, non modificabile' });
+  }
+  // Aggiorna solo la formazione titolare e il flag di conferma formazione
+  data.users[username] = {
+    ...data.users[username],
+    starters,
+    formationConfirmed: confirmed
+  };
+  saveMarketData(data);
+  res.json({ ok: true });
 });
