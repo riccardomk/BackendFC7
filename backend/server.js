@@ -1,14 +1,7 @@
-// Endpoint per ottenere la deadline della formazione
-app.get('/formation/deadline', (req, res) => {
-  const next = getNextCommonWeekAndFirstMatch();
-  if (!next) {
-    return res.status(404).json({ error: 'Nessuna giornata comune trovata tra tutti i campionati.' });
-  }
-  const deadline = new Date(next.firstMatch.getTime() - 30 * 60 * 1000);
-  res.json({ week: next.week, deadline: deadline.toISOString(), firstMatch: next.firstMatch.toISOString() });
-});
 // ===== CALENDARI CAMPIONATI (esempio statico, da aggiornare con le date reali) =====
 const CALENDARI = {
+// ...dopo tutte le altre route...
+
   'Serie A': [
     { week: 10, date: '2025-10-28T18:00:00Z' },
     // ...altre giornate...
