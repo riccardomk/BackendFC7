@@ -167,14 +167,19 @@ app.post('/market/:username', (req, res) => {
   const { credits, selected, confirmed, vendita, acquisto, valoreVendita, valoreAcquisto } = req.body;
   if (!username) return res.status(400).json({ error: 'Username mancante' });
   let data = loadMarketData();
-  // Fase iniziale: se l'utente non ha ancora 15 club, nessun limite
-  const clubsPosseduti = selected ? Object.values(selected).flat() : [];
-  if (!data.users[username] || clubsPosseduti.length < 15) {
-    data.users[username] = { credits, selected, confirmed, cambi: 0, lastWindow: null };
+  // --- FASE INIZIALE: salvataggio sempre libero finché non confermato ---
+  if (!data.users[username] || !data.users[username].confirmed) {
+    data.users[username] = {
+      credits,
+      selected,
+      confirmed: !!confirmed,
+      cambi: data.users[username]?.cambi || 0,
+      lastWindow: data.users[username]?.lastWindow || null
+    };
     saveMarketData(data);
     return res.json({ ok: true });
   }
-  // Dopo la fase iniziale: applica logica finestre e cambi
+  // --- DOPO LA CONFERMA: applica logica finestre e cambi ---
   if (!isMercatoOpen()) {
     return res.status(403).json({ error: 'Mercato chiuso. Attendi la prossima finestra.' });
   }
@@ -185,7 +190,6 @@ app.post('/market/:username', (req, res) => {
     return res.status(403).json({ error: 'Mercato chiuso. Attendi la prossima finestra.' });
   }
   // Reset cambi se nuova finestra
-  if (!data.users[username]) data.users[username] = { credits: 200, selected: {}, confirmed: false, cambi: 0, lastWindow: null };
   if (data.users[username].lastWindow !== currentWindow.start) {
     data.users[username].cambi = 0;
     data.users[username].lastWindow = currentWindow.start;
@@ -194,11 +198,9 @@ app.post('/market/:username', (req, res) => {
     return res.status(403).json({ error: 'Hai già effettuato il numero massimo di cambi per questa finestra di mercato.' });
   }
   // Gestione crediti e cambi
-  // Se vendita e acquisto sono specificati, aggiorna crediti e incrementa cambi
   if (vendita && valoreVendita) {
     data.users[username].credits += valoreVendita;
     data.users[username].cambi += 1;
-    // Rimuovi squadra venduta
     for (const lega in data.users[username].selected) {
       data.users[username].selected[lega] = data.users[username].selected[lega].filter(sq => sq !== vendita);
     }
@@ -209,11 +211,9 @@ app.post('/market/:username', (req, res) => {
     }
     data.users[username].credits -= valoreAcquisto;
     data.users[username].cambi += 1;
-    // Aggiungi squadra acquistata
     if (!data.users[username].selected[acquisto.lega]) data.users[username].selected[acquisto.lega] = [];
     data.users[username].selected[acquisto.lega].push(acquisto.nome);
   }
-  // Aggiorna conferma se presente
   if (typeof confirmed !== 'undefined') {
     data.users[username].confirmed = confirmed;
   }
