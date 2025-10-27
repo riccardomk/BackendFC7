@@ -390,6 +390,7 @@ app.get('/formation/:userId', (req, res) => {
   res.json(formationData[userId]);
 });
 
+
 // Route GET per la deadline della formazione (prossima settimana comune e deadline invio)
 app.get('/formation/deadline', (req, res) => {
   const next = getNextCommonWeekAndFirstMatch();
@@ -399,6 +400,30 @@ app.get('/formation/deadline', (req, res) => {
   // Deadline: 30 minuti prima della prima partita della settimana comune
   const deadline = new Date(next.firstMatch.getTime() - 30 * 60 * 1000);
   res.json({ deadline: deadline.toISOString(), week: next.week });
+});
+
+// Endpoint diagnostico per admin: mostra settimane comuni e stato allineamento calendari
+app.get('/formation/diagnostics', (req, res) => {
+  const weeks = {};
+  for (const league in CALENDARI) {
+    for (const g of CALENDARI[league]) {
+      if (!weeks[g.week]) weeks[g.week] = [];
+      weeks[g.week].push(league);
+    }
+  }
+  const totalLeagues = Object.keys(CALENDARI).length;
+  const commonWeeks = Object.entries(weeks)
+    .filter(([week, leagues]) => leagues.length === totalLeagues)
+    .map(([week, leagues]) => parseInt(week));
+  res.json({
+    totalLeagues,
+    weeks,
+    commonWeeks,
+    nextCommonWeek: commonWeeks.length > 0 ? commonWeeks[0] : null,
+    diagnostics: commonWeeks.length === 0
+      ? 'ATTENZIONE: Nessuna settimana comune tra i calendari! Nessuno potrà inviare la formazione finché non allinei le giornate.'
+      : `Prossima settimana comune disponibile per la formazione: ${commonWeeks[0]}`
+  });
 });
 
 // ===== AVVIO SERVER =====
