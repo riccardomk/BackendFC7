@@ -147,17 +147,10 @@ app.post('/market/:username', (req, res) => {
   const { credits, selected, confirmed } = req.body;
   if (!username) return res.status(400).json({ error: 'Username mancante' });
   let data = loadMarketData();
-  // Blocca solo la formazione se già confermata
-  if (data.users[username] && data.users[username].formationConfirmed) {
-    return res.status(403).json({ error: 'Formazione già confermata, non modificabile' });
+  if (data.users[username] && data.users[username].confirmed) {
+    return res.status(403).json({ error: 'Mercato già confermato, non modificabile' });
   }
-  // Mantieni eventuali altri dati utente (es. credits, mercato)
-  data.users[username] = {
-    ...data.users[username],
-    credits,
-    selected,
-    formationConfirmed: confirmed // confirmed ora blocca solo la formazione
-  };
+  data.users[username] = { credits, selected, confirmed };
   saveMarketData(data);
   res.json({ ok: true });
 });
