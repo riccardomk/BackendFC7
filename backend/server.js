@@ -1,3 +1,4 @@
+// ...existing code...
 // ===== ROUTE FORMAZIONE (CONFERMA TITOLARI) =====
 app.post('/formation/:username', (req, res) => {
   const username = req.params.username;
