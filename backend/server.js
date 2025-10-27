@@ -358,6 +358,7 @@ app.post('/formation/:userId', (req, res) => {
   res.json({ ok: true, starters });
 });
 
+
 // Route GET per recuperare la formazione confermata di un utente
 app.get('/formation/:userId', (req, res) => {
   const userId = req.params.userId;
@@ -366,6 +367,17 @@ app.get('/formation/:userId', (req, res) => {
     return res.status(404).json({ error: 'Nessuna formazione confermata trovata' });
   }
   res.json(formationData[userId]);
+});
+
+// Route GET per la deadline della formazione (prossima settimana comune e deadline invio)
+app.get('/formation/deadline', (req, res) => {
+  const next = getNextCommonWeekAndFirstMatch();
+  if (!next) {
+    return res.json({ deadline: null, week: null });
+  }
+  // Deadline: 30 minuti prima della prima partita della settimana comune
+  const deadline = new Date(next.firstMatch.getTime() - 30 * 60 * 1000);
+  res.json({ deadline: deadline.toISOString(), week: next.week });
 });
 
 // ===== AVVIO SERVER =====
