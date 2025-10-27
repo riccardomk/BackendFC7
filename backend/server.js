@@ -1,3 +1,8 @@
+// ===== DOPO INIZIALIZZAZIONE APP =====
+// (Aggiungi qui la route formazione dopo const app = express())
+
+// ...esistente...
+
 // ===== ROUTE FORMAZIONE (CONFERMA TITOLARI) =====
 app.post('/formation/:username', (req, res) => {
   const username = req.params.username;
