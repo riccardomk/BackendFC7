@@ -1,3 +1,55 @@
+// Endpoint per ottenere la deadline della formazione
+app.get('/formation/deadline', (req, res) => {
+  const next = getNextCommonWeekAndFirstMatch();
+  if (!next) {
+    return res.status(404).json({ error: 'Nessuna giornata comune trovata tra tutti i campionati.' });
+  }
+  const deadline = new Date(next.firstMatch.getTime() - 30 * 60 * 1000);
+  res.json({ week: next.week, deadline: deadline.toISOString(), firstMatch: next.firstMatch.toISOString() });
+});
+// ===== CALENDARI CAMPIONATI (esempio statico, da aggiornare con le date reali) =====
+const CALENDARI = {
+  'Serie A': [
+    { week: 10, date: '2025-10-28T18:00:00Z' },
+    // ...altre giornate...
+  ],
+  'Premier League': [
+    { week: 10, date: '2025-10-28T20:00:00Z' },
+    // ...altre giornate...
+  ],
+  'LaLiga': [
+    { week: 10, date: '2025-10-28T21:00:00Z' },
+    // ...altre giornate...
+  ],
+  'Bundesliga': [
+    { week: 10, date: '2025-10-28T19:00:00Z' },
+    // ...altre giornate...
+  ],
+  'Ligue 1': [
+    { week: 10, date: '2025-10-28T18:30:00Z' },
+    // ...altre giornate...
+  ]
+};
+
+function getNextCommonWeekAndFirstMatch() {
+  // Trova la prossima settimana in cui tutti i campionati hanno una giornata
+  const weeks = {};
+  for (const league in CALENDARI) {
+    for (const g of CALENDARI[league]) {
+      if (!weeks[g.week]) weeks[g.week] = [];
+      weeks[g.week].push({ league, date: g.date });
+    }
+  }
+  // Trova la prima settimana in cui tutti i campionati sono presenti
+  for (const week in weeks) {
+    if (weeks[week].length === Object.keys(CALENDARI).length) {
+      // Trova la data più vicina (prima partita tra tutti)
+      const firstMatch = weeks[week].map(x => new Date(x.date)).sort((a, b) => a - b)[0];
+      return { week: parseInt(week), firstMatch };
+    }
+  }
+  return null;
+}
 // ===== IMPORTS ALL'INIZIO =====
 import express from 'express';
 import cors from 'cors';
@@ -275,6 +327,16 @@ app.post('/formation/:userId', (req, res) => {
   const { starters, confirmed } = req.body;
   if (!userId || !Array.isArray(starters) || starters.length !== 11) {
     return res.status(400).json({ error: 'Dati formazione non validi (serve 11 titolari)' });
+  }
+  // --- LOGICA BLOCCO FORMAZIONE ---
+  const next = getNextCommonWeekAndFirstMatch();
+  if (!next) {
+    return res.status(403).json({ error: 'Non tutti i campionati hanno una giornata attiva questa settimana.' });
+  }
+  const now = new Date();
+  const limite = new Date(next.firstMatch.getTime() - 30 * 60 * 1000); // 30 minuti prima
+  if (now > limite) {
+    return res.status(403).json({ error: 'Tempo scaduto: la formazione poteva essere inviata solo fino a 30 minuti prima della prima partita.' });
   }
   // Leggi mercato per validare club posseduti
   const marketData = loadMarketData();
