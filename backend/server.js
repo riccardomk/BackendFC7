@@ -1,7 +1,15 @@
 
 // ===== CALENDARI CAMPIONATI (caricamento automatico da file JSON reali) =====
 // ...existing code...
-import fetch from 'node-fetch';
+let fetch;
+try {
+  fetch = (await import('node-fetch')).default;
+} catch (e) {
+  console.error("node-fetch non trovato, provo a installarlo...");
+  const { execSync } = await import('child_process');
+  execSync('npm install node-fetch@3', { stdio: 'inherit' });
+  fetch = (await import('node-fetch')).default;
+}
 
 const CALENDAR_FILES = {
   'Serie A': path.join(__dirname, 'calendar-seriea.json'),
