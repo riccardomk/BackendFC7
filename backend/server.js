@@ -178,6 +178,7 @@ app.post('/upload-profile-pic', async (req, res) => {
     res.status(500).json({ error: 'Errore durante l\'upload: ' + error.message });
   }
 });
+
 app.get('/profile-pic/:username', (req, res) => {
   const username = req.params.username;
   const url = getUserProfilePic(username);
@@ -186,6 +187,52 @@ app.get('/profile-pic/:username', (req, res) => {
   } else {
     res.status(404).json({ error: 'Foto profilo non trovata' });
   }
+});
+
+// ===== ROUTE FORMAZIONE: Salva la formazione confermata per utente =====
+import formationFs from 'fs';
+const FORMATION_FILE = path.join(__dirname, 'formation-data.json');
+
+function loadFormationData() {
+  if (!formationFs.existsSync(FORMATION_FILE)) return {};
+  return JSON.parse(formationFs.readFileSync(FORMATION_FILE, 'utf8'));
+}
+function saveFormationData(data) {
+  formationFs.writeFileSync(FORMATION_FILE, JSON.stringify(data, null, 2));
+}
+
+// Salva la formazione solo se non già confermata per il turno
+app.post('/formation/:userId', (req, res) => {
+  const userId = req.params.userId;
+  const { starters, confirmed } = req.body;
+  if (!userId || !Array.isArray(starters) || starters.length !== 11) {
+    return res.status(400).json({ error: 'Dati formazione non validi (serve 11 titolari)' });
+  }
+  // Leggi mercato per validare club posseduti
+  const marketData = loadMarketData();
+  const userMarket = marketData.users[userId];
+  if (!userMarket || !userMarket.selected) {
+    return res.status(400).json({ error: 'Nessun club acquistato dal mercato' });
+  }
+  // Appiattisci tutti i club acquistati
+  const allOwnedClubs = Object.values(userMarket.selected).flat();
+  // Verifica che tutti i club schierati siano tra quelli acquistati
+  const valid = starters.every(club => allOwnedClubs.includes(club));
+  if (!valid) {
+    return res.status(400).json({ error: 'Almeno un club non è stato acquistato dal mercato' });
+  }
+  // Carica formazioni già inviate
+  const formationData = loadFormationData();
+  if (formationData[userId] && formationData[userId].confirmed) {
+    return res.status(403).json({ error: 'Formazione già confermata per questo turno' });
+  }
+  formationData[userId] = {
+    starters,
+    confirmed: true,
+    timestamp: new Date().toISOString()
+  };
+  saveFormationData(formationData);
+  res.json({ ok: true, starters });
 });
 
 // ===== AVVIO SERVER =====
