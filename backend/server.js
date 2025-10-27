@@ -149,17 +149,76 @@ app.post('/update-ranking', (req, res) => {
 });
 
 // ===== ROUTE MERCATO =====
+// === LOGICA FINESTRE DI MERCATO ===
+const mercatoWindows = [
+  { start: '2025-09-01T00:00:00Z', end: '2025-09-08T23:59:59Z' },
+  { start: '2025-12-01T00:00:00Z', end: '2025-12-08T23:59:59Z' },
+  { start: '2026-03-01T00:00:00Z', end: '2026-03-08T23:59:59Z' }
+];
+function isMercatoOpen(now = new Date()) {
+  return mercatoWindows.some(win => new Date(win.start) <= now && now <= new Date(win.end));
+}
+
+// === LOGICA LIMITI CAMBI ===
+const MAX_CAMBI_PER_WINDOW = 6;
+
 app.post('/market/:username', (req, res) => {
   const username = req.params.username;
-  const { credits, selected, confirmed } = req.body;
+  const { credits, selected, confirmed, vendita, acquisto, valoreVendita, valoreAcquisto } = req.body;
   if (!username) return res.status(400).json({ error: 'Username mancante' });
   let data = loadMarketData();
-  if (data.users[username] && data.users[username].confirmed) {
-    return res.status(403).json({ error: 'Mercato già confermato, non modificabile' });
+  // Fase iniziale: se l'utente non ha ancora 15 club, nessun limite
+  const clubsPosseduti = selected ? Object.values(selected).flat() : [];
+  if (!data.users[username] || clubsPosseduti.length < 15) {
+    data.users[username] = { credits, selected, confirmed, cambi: 0, lastWindow: null };
+    saveMarketData(data);
+    return res.json({ ok: true });
   }
-  data.users[username] = { credits, selected, confirmed };
+  // Dopo la fase iniziale: applica logica finestre e cambi
+  if (!isMercatoOpen()) {
+    return res.status(403).json({ error: 'Mercato chiuso. Attendi la prossima finestra.' });
+  }
+  // Identifica la finestra attuale
+  const now = new Date();
+  const currentWindow = mercatoWindows.find(win => new Date(win.start) <= now && now <= new Date(win.end));
+  if (!currentWindow) {
+    return res.status(403).json({ error: 'Mercato chiuso. Attendi la prossima finestra.' });
+  }
+  // Reset cambi se nuova finestra
+  if (!data.users[username]) data.users[username] = { credits: 200, selected: {}, confirmed: false, cambi: 0, lastWindow: null };
+  if (data.users[username].lastWindow !== currentWindow.start) {
+    data.users[username].cambi = 0;
+    data.users[username].lastWindow = currentWindow.start;
+  }
+  if (data.users[username].cambi >= MAX_CAMBI_PER_WINDOW) {
+    return res.status(403).json({ error: 'Hai già effettuato il numero massimo di cambi per questa finestra di mercato.' });
+  }
+  // Gestione crediti e cambi
+  // Se vendita e acquisto sono specificati, aggiorna crediti e incrementa cambi
+  if (vendita && valoreVendita) {
+    data.users[username].credits += valoreVendita;
+    data.users[username].cambi += 1;
+    // Rimuovi squadra venduta
+    for (const lega in data.users[username].selected) {
+      data.users[username].selected[lega] = data.users[username].selected[lega].filter(sq => sq !== vendita);
+    }
+  }
+  if (acquisto && valoreAcquisto) {
+    if (data.users[username].credits < valoreAcquisto) {
+      return res.status(400).json({ error: 'Crediti insufficienti per acquistare questa squadra.' });
+    }
+    data.users[username].credits -= valoreAcquisto;
+    data.users[username].cambi += 1;
+    // Aggiungi squadra acquistata
+    if (!data.users[username].selected[acquisto.lega]) data.users[username].selected[acquisto.lega] = [];
+    data.users[username].selected[acquisto.lega].push(acquisto.nome);
+  }
+  // Aggiorna conferma se presente
+  if (typeof confirmed !== 'undefined') {
+    data.users[username].confirmed = confirmed;
+  }
   saveMarketData(data);
-  res.json({ ok: true });
+  res.json({ ok: true, credits: data.users[username].credits, cambi: data.users[username].cambi });
 });
 app.get('/market/:username', (req, res) => {
   const username = req.params.username;
