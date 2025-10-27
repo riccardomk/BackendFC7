@@ -1,27 +1,76 @@
 
-// ===== CALENDARI CAMPIONATI (esempio statico, da aggiornare con le date reali) =====
-const CALENDARI = {
-  'Serie A': [
-    { week: 10, date: '2025-10-28T18:00:00Z' },
-    // ...altre giornate...
-  ],
-  'Premier League': [
-    { week: 10, date: '2025-10-28T20:00:00Z' },
-    // ...altre giornate...
-  ],
-  'LaLiga': [
-    { week: 10, date: '2025-10-28T21:00:00Z' },
-    // ...altre giornate...
-  ],
-  'Bundesliga': [
-    { week: 10, date: '2025-10-28T19:00:00Z' },
-    // ...altre giornate...
-  ],
-  'Ligue 1': [
-    { week: 10, date: '2025-10-28T18:30:00Z' },
-    // ...altre giornate...
-  ]
+// ===== CALENDARI CAMPIONATI (caricamento automatico da file JSON reali) =====
+import fs from 'fs';
+import path from 'path';
+import fetch from 'node-fetch';
+
+const CALENDAR_FILES = {
+  'Serie A': path.join(__dirname, 'calendar-seriea.json'),
+  'Premier League': path.join(__dirname, 'calendar-premier.json'),
+  'LaLiga': path.join(__dirname, 'calendar-laliga.json'),
+  'Bundesliga': path.join(__dirname, 'calendar-bundesliga.json'),
+  'Ligue 1': path.join(__dirname, 'calendar-ligue1.json'),
 };
+
+const FOOTBALL_DATA_API = 'https://api.football-data.org/v4/competitions';
+const FOOTBALL_DATA_CODES = {
+  'Serie A': 'SA',
+  'Premier League': 'PL',
+  'LaLiga': 'PD',
+  'Bundesliga': 'BL1',
+  'Ligue 1': 'FL1',
+};
+const FOOTBALL_DATA_TOKEN = process.env.FOOTBALL_DATA_TOKEN || '81ed2d1e396e4164b91e079b249038df';
+
+async function fetchCalendar(league, file) {
+  const code = FOOTBALL_DATA_CODES[league];
+  if (!code) return [];
+  try {
+    const res = await fetch(`${FOOTBALL_DATA_API}/${code}/matches?season=2025`, {
+      headers: { 'X-Auth-Token': FOOTBALL_DATA_TOKEN }
+    });
+    if (!res.ok) throw new Error('API error');
+    const data = await res.json();
+    // Estrarre week e date
+    const matches = data.matches || [];
+    // Raggruppa per giornata
+    const byWeek = {};
+    for (const m of matches) {
+      if (!byWeek[m.matchday]) byWeek[m.matchday] = [];
+      byWeek[m.matchday].push(m.utcDate);
+    }
+    // Per ogni giornata, prendi la data più vicina (prima partita)
+    const result = Object.entries(byWeek).map(([week, dates]) => ({
+      week: parseInt(week),
+      date: dates.sort()[0]
+    }));
+    // Salva su file
+    fs.writeFileSync(file, JSON.stringify(result, null, 2));
+    return result;
+  } catch (e) {
+    console.error('Errore fetch calendario', league, e.message);
+    return [];
+  }
+}
+
+async function loadCalendari() {
+  const calendari = {};
+  for (const [league, file] of Object.entries(CALENDAR_FILES)) {
+    if (fs.existsSync(file)) {
+      calendari[league] = JSON.parse(fs.readFileSync(file, 'utf8'));
+    } else {
+      // Scarica e crea file se mancante
+      calendari[league] = await fetchCalendar(league, file);
+    }
+  }
+  return calendari;
+}
+
+// Caricamento asincrono all'avvio
+let CALENDARI = {};
+await (async () => {
+  CALENDARI = await loadCalendari();
+})();
 
 // Funzione di controllo per segnalare se manca una settimana comune
 function checkCalendariCommonWeek() {
@@ -344,15 +393,15 @@ app.post('/formation/:userId', (req, res) => {
   if (!userId || !Array.isArray(starters) || starters.length !== 11) {
     return res.status(400).json({ error: 'Dati formazione non validi (serve 11 titolari)' });
   }
-  // --- LOGICA BLOCCO FORMAZIONE (ora accetta anche se gioca solo una lega) ---
-  const next = getNextAnyWeekAndFirstMatch();
+  // --- LOGICA BLOCCO FORMAZIONE: SOLO SE TUTTI I CAMPIONATI HANNO UNA GIORNATA (SETTIMANA COMUNE) ---
+  const next = getNextCommonWeekAndFirstMatch();
   if (!next) {
-    return res.status(403).json({ error: 'Nessuna giornata attiva nei calendari.' });
+    return res.status(403).json({ error: 'Non tutti i campionati hanno una giornata attiva questa settimana.' });
   }
   const now = new Date();
   const limite = new Date(next.firstMatch.getTime() - 30 * 60 * 1000); // 30 minuti prima
   if (now > limite) {
-    return res.status(403).json({ error: 'Tempo scaduto: la formazione poteva essere inviata solo fino a 30 minuti prima della prossima partita.' });
+    return res.status(403).json({ error: 'Tempo scaduto: la formazione poteva essere inviata solo fino a 30 minuti prima della prima partita.' });
   }
   // Leggi mercato per validare club posseduti
   const marketData = loadMarketData();
@@ -393,13 +442,13 @@ app.get('/formation/:userId', (req, res) => {
 });
 
 
-// Route GET per la deadline della formazione (prossima partita di qualsiasi lega)
+// Route GET per la deadline della formazione (prossima settimana comune e deadline invio)
 app.get('/formation/deadline', (req, res) => {
-  const next = getNextAnyWeekAndFirstMatch();
+  const next = getNextCommonWeekAndFirstMatch();
   if (!next) {
     return res.json({ deadline: null, week: null });
   }
-  // Deadline: 30 minuti prima della prossima partita
+  // Deadline: 30 minuti prima della prima partita della settimana comune
   const deadline = new Date(next.firstMatch.getTime() - 30 * 60 * 1000);
   res.json({ deadline: deadline.toISOString(), week: next.week });
 });
