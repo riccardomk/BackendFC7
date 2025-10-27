@@ -342,7 +342,7 @@ app.post('/formation/:userId', (req, res) => {
   if (!userId || !Array.isArray(starters) || starters.length !== 11) {
     return res.status(400).json({ error: 'Dati formazione non validi (serve 11 titolari)' });
   }
-  // --- LOGICA BLOCCO FORMAZIONE ---
+  // --- LOGICA BLOCCO FORMAZIONE: SOLO SE TUTTI I CAMPIONATI HANNO UNA GIORNATA (SETTIMANA COMUNE) ---
   const next = getNextCommonWeekAndFirstMatch();
   if (!next) {
     return res.status(403).json({ error: 'Non tutti i campionati hanno una giornata attiva questa settimana.' });
