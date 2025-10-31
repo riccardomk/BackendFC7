@@ -438,16 +438,6 @@ app.post('/formation/:userId', (req, res) => {
 });
 
 
-// Route GET per recuperare la formazione confermata di un utente
-app.get('/formation/:userId', (req, res) => {
-  const userId = req.params.userId;
-  const formationData = loadFormationData();
-  if (!formationData[userId]) {
-    return res.status(404).json({ error: 'Nessuna formazione confermata trovata' });
-  }
-  res.json(formationData[userId]);
-});
-
 
 // Route GET per la deadline della formazione (prossima settimana comune e deadline invio)
 app.get('/formation/deadline', (req, res) => {
@@ -482,6 +472,16 @@ app.get('/formation/diagnostics', (req, res) => {
       ? 'ATTENZIONE: Nessuna settimana comune tra i calendari! Nessuno potrà inviare la formazione finché non allinei le giornate.'
       : `Prossima settimana comune disponibile per la formazione: ${commonWeeks[0]}`
   });
+});
+
+// Route GET per recuperare la formazione confermata di un utente
+app.get('/formation/:userId', (req, res) => {
+  const userId = req.params.userId;
+  const formationData = loadFormationData();
+  if (!formationData[userId]) {
+    return res.status(404).json({ error: 'Nessuna formazione confermata trovata' });
+  }
+  res.json(formationData[userId]);
 });
 
 // ===== AVVIO SERVER =====
