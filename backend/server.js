@@ -443,29 +443,6 @@ app.post('/formation/:userId', (req, res) => {
   res.json({ ok: true, starters });
 });
 
-// Endpoint per annullare la conferma della formazione (solo prima della deadline)
-app.post('/formation/:userId/unconfirm', (req, res) => {
-  const userId = req.params.userId;
-  const formationData = loadFormationData();
-  if (!formationData[userId] || !formationData[userId].confirmed) {
-    return res.status(400).json({ error: 'Nessuna formazione confermata da annullare' });
-  }
-  // Controlla deadline
-  const next = getNextCommonWeekAndFirstMatch();
-  if (!next) {
-    return res.status(403).json({ error: 'Non tutti i campionati hanno una giornata attiva questa settimana.' });
-  }
-  const now = new Date();
-  const limite = new Date(next.firstMatch.getTime() - 30 * 60 * 1000);
-  if (now > limite) {
-    return res.status(403).json({ error: 'Tempo scaduto: non puoi più annullare la conferma.' });
-  }
-  // Annulla la conferma (ma lascia i titolari salvati)
-  formationData[userId].confirmed = false;
-  saveFormationData(formationData);
-  res.json({ ok: true });
-});
-
 
 
 // Route GET per la deadline della formazione (prossima settimana comune e deadline invio)
