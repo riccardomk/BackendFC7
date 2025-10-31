@@ -491,7 +491,7 @@ app.get('/formation/:userId', (req, res) => {
 });
 
 // ===== AVVIO SERVER =====
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 1000;
 app.listen(PORT, () => {
   console.log(`Server avviato sulla porta ${PORT}`);
 });
