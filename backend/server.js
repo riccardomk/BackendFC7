@@ -431,9 +431,7 @@ app.post('/formation/:userId', (req, res) => {
   }
   // Carica formazioni già inviate
   const formationData = loadFormationData();
-  if (formationData[userId] && formationData[userId].confirmed) {
-    return res.status(403).json({ error: 'Formazione già confermata per questo turno' });
-  }
+  // Permetti sempre la sovrascrittura fino alla deadline
   formationData[userId] = {
     starters,
     confirmed: true,
