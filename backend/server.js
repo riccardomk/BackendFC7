@@ -399,14 +399,14 @@ function saveFormationData(data) {
   formationFs.writeFileSync(FORMATION_FILE, JSON.stringify(data, null, 2));
 }
 
-// Salva la formazione solo se non già confermata per il turno
+
+// Permetti la modifica della formazione fino allo scadere del tempo
 app.post('/formation/:userId', (req, res) => {
   const userId = req.params.userId;
-  const { starters, confirmed } = req.body;
+  const { starters } = req.body;
   if (!userId || !Array.isArray(starters) || starters.length !== 11) {
     return res.status(400).json({ error: 'Dati formazione non validi (serve 11 titolari)' });
   }
-  // --- LOGICA BLOCCO FORMAZIONE: SOLO SE TUTTI I CAMPIONATI HANNO UNA GIORNATA (SETTIMANA COMUNE) ---
   const next = getNextCommonWeekAndFirstMatch();
   if (!next) {
     return res.status(403).json({ error: 'Non tutti i campionati hanno una giornata attiva questa settimana.' });
@@ -414,6 +414,11 @@ app.post('/formation/:userId', (req, res) => {
   const now = new Date();
   const limite = new Date(next.firstMatch.getTime() - 30 * 60 * 1000); // 30 minuti prima
   if (now > limite) {
+    // Dopo la deadline, blocca la formazione definitivamente
+    const formationData = loadFormationData();
+    if (formationData[userId] && formationData[userId].confirmed) {
+      return res.status(403).json({ error: 'Formazione già confermata per questo turno' });
+    }
     return res.status(403).json({ error: 'Tempo scaduto: la formazione poteva essere inviata solo fino a 30 minuti prima della prima partita.' });
   }
   // Leggi mercato per validare club posseduti
@@ -422,21 +427,16 @@ app.post('/formation/:userId', (req, res) => {
   if (!userMarket || !userMarket.selected) {
     return res.status(400).json({ error: 'Nessun club acquistato dal mercato' });
   }
-  // Appiattisci tutti i club acquistati
   const allOwnedClubs = Object.values(userMarket.selected).flat();
-  // Verifica che tutti i club schierati siano tra quelli acquistati
   const valid = starters.every(club => allOwnedClubs.includes(club));
   if (!valid) {
     return res.status(400).json({ error: 'Almeno un club non è stato acquistato dal mercato' });
   }
-  // Carica formazioni già inviate
+  // Salva la formazione (sovrascrive sempre finché non scade il tempo)
   const formationData = loadFormationData();
-  if (formationData[userId] && formationData[userId].confirmed) {
-    return res.status(403).json({ error: 'Formazione già confermata per questo turno' });
-  }
   formationData[userId] = {
     starters,
-    confirmed: true,
+    confirmed: false,
     timestamp: new Date().toISOString()
   };
   saveFormationData(formationData);
