@@ -118,16 +118,22 @@ function getNextCommonWeekAndFirstMatch() {
     }
   }
   const totalLeagues = Object.keys(CALENDARI).length;
+  const now = new Date();
   const commonWeeks = Object.entries(weeks)
     .filter(([week, arr]) => arr.length === totalLeagues)
     .map(([week, arr]) => ({
       week: parseInt(week),
       dates: arr.map(x => x.date)
     }))
-    .sort((a, b) => a.week - b.week);
-  if (commonWeeks.length === 0) return null;
-  const next = commonWeeks[0];
-  // Trova la data più vicina tra tutte le leghe per quella settimana
+    // Ordina per data della prima partita della settimana
+    .sort((a, b) => {
+      const dateA = new Date(a.dates.sort()[0]);
+      const dateB = new Date(b.dates.sort()[0]);
+      return dateA - dateB;
+    });
+  // Trova la prima settimana comune con data >= oggi
+  const next = commonWeeks.find(w => new Date(w.dates.sort()[0]) >= now);
+  if (!next) return null;
   const firstMatch = new Date(next.dates.sort()[0]);
   return { week: next.week, firstMatch };
 }
