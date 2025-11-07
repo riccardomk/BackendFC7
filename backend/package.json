@@ -10,7 +10,7 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "module",
+  "type": "commonjs",
   "dependencies": {
     "@babel/runtime": "^7.28.4",
     "@expo/vector-icons": "^15.0.2",
