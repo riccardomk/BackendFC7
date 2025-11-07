@@ -144,7 +144,7 @@ function getNextCommonWeekAndFirstMatch() {
 
 
 // ===== COSTANTI FILE =====
-const RANKING_FILE = path.join(__dirname, 'ranking-data.json');
+//const RANKING_FILE = path.join(__dirname, 'ranking-data.json');
 const MONGO_URI = process.env.MONGO_URI || 'INSERISCI_LA_TUA_STRINGA_DI_CONNESSIONE_MONGODB_ATLAS';
 const MONGO_DB = process.env.MONGO_DB || 'fantaclub';
 let mongoClient, mongoDb;
@@ -157,15 +157,23 @@ async function connectMongo() {
   return mongoDb;
 }
 const USERS_FILE = path.join(__dirname, 'users-profile-pics.json');
-const MARKET_FILE = path.join(__dirname, 'market-data.json');
+//const MARKET_FILE = path.join(__dirname, 'market-data.json');
 
 // ===== FUNZIONI UTILI =====
-function loadRankingData() {
-  if (!fs.existsSync(RANKING_FILE)) return { global: {}, weekly: {} };
-  return JSON.parse(fs.readFileSync(RANKING_FILE, 'utf8'));
+// Funzioni ranking su MongoDB
+async function loadRankingData() {
+  const db = await connectMongo();
+  const doc = await db.collection('ranking').findOne({ _id: 'main' });
+  if (!doc) return { global: {}, weekly: {} };
+  return { global: doc.global || {}, weekly: doc.weekly || {} };
 }
-function saveRankingData(data) {
-  fs.writeFileSync(RANKING_FILE, JSON.stringify(data, null, 2));
+async function saveRankingData(data) {
+  const db = await connectMongo();
+  await db.collection('ranking').updateOne(
+    { _id: 'main' },
+    { $set: { global: data.global, weekly: data.weekly } },
+    { upsert: true }
+  );
 }
 function calcolaPunteggioGiornata(clubsSchierati, results) {
   let punti = 0;
@@ -208,12 +216,20 @@ function getUserProfilePic(username) {
   const data = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
   return data.users[username] || null;
 }
-function loadMarketData() {
-  if (!fs.existsSync(MARKET_FILE)) return { users: {} };
-  return JSON.parse(fs.readFileSync(MARKET_FILE, 'utf8'));
+// Funzioni mercato su MongoDB
+async function loadMarketData() {
+  const db = await connectMongo();
+  const doc = await db.collection('market').findOne({ _id: 'main' });
+  if (!doc) return { users: {} };
+  return { users: doc.users || {} };
 }
-function saveMarketData(data) {
-  fs.writeFileSync(MARKET_FILE, JSON.stringify(data, null, 2));
+async function saveMarketData(data) {
+  const db = await connectMongo();
+  await db.collection('market').updateOne(
+    { _id: 'main' },
+    { $set: { users: data.users } },
+    { upsert: true }
+  );
 }
 
 // ===== INIZIALIZZAZIONE APP =====
@@ -261,51 +277,64 @@ app.post('/register', async (req, res) => {
 });
 
 // ===== ROUTE RANKING =====
-app.get('/ranking/global', (req, res) => {
-  const ranking = loadRankingData();
-  const db = loadDb();
-  // Unisci tutti gli utenti registrati con quelli che hanno punti
-  const allUsernames = Array.from(new Set([
-    ...db.users.map(u => u.name),
-    ...Object.keys(ranking.global)
-  ]));
-  const arr = allUsernames.map(username => {
-    const stats = ranking.global[username] || { punti: 0, golFatti: 0, golSubiti: 0, diffReti: 0 };
-    return { username, ...stats };
-  });
-  arr.sort((a, b) => {
-    if (b.punti !== a.punti) return b.punti - a.punti;
-    if (b.diffReti !== a.diffReti) return b.diffReti - a.diffReti;
-    return b.golFatti - a.golFatti;
-  });
-  res.json(arr);
+app.get('/ranking/global', async (req, res) => {
+  try {
+    const ranking = await loadRankingData();
+    // Prendi tutti gli utenti registrati
+    const db = await connectMongo();
+    const users = await db.collection('users').find({}).toArray();
+    const allUsernames = Array.from(new Set([
+      ...users.map(u => u.name),
+      ...Object.keys(ranking.global)
+    ]));
+    const arr = allUsernames.map(username => {
+      const stats = ranking.global[username] || { punti: 0, golFatti: 0, golSubiti: 0, diffReti: 0 };
+      return { username, ...stats };
+    });
+    arr.sort((a, b) => {
+      if (b.punti !== a.punti) return b.punti - a.punti;
+      if (b.diffReti !== a.diffReti) return b.diffReti - a.diffReti;
+      return b.golFatti - a.golFatti;
+    });
+    res.json(arr);
+  } catch (e) {
+    res.status(500).json({ error: 'Errore ranking global' });
+  }
 });
-app.get('/ranking/weekly/:week', (req, res) => {
-  const week = req.params.week;
-  const ranking = loadRankingData();
-  const weekData = ranking.weekly[week] || {};
-  const arr = Object.entries(weekData).map(([username, stats]) => ({ username, ...stats }));
-  arr.sort((a, b) => {
-    if (b.punti !== a.punti) return b.punti - a.punti;
-    if (b.diffReti !== a.diffReti) return b.diffReti - a.diffReti;
-    return b.golFatti - a.golFatti;
-  });
-  res.json(arr);
+app.get('/ranking/weekly/:week', async (req, res) => {
+  try {
+    const week = req.params.week;
+    const ranking = await loadRankingData();
+    const weekData = ranking.weekly[week] || {};
+    const arr = Object.entries(weekData).map(([username, stats]) => ({ username, ...stats }));
+    arr.sort((a, b) => {
+      if (b.punti !== a.punti) return b.punti - a.punti;
+      if (b.diffReti !== a.diffReti) return b.diffReti - a.diffReti;
+      return b.golFatti - a.golFatti;
+    });
+    res.json(arr);
+  } catch (e) {
+    res.status(500).json({ error: 'Errore ranking weekly' });
+  }
 });
-app.post('/update-ranking', (req, res) => {
-  const { username, clubsSchierati, results, week } = req.body;
-  if (!username || !clubsSchierati || !results || !week) return res.status(400).json({ error: 'Dati mancanti' });
-  const ranking = loadRankingData();
-  const giornata = calcolaPunteggioGiornata(clubsSchierati, results);
-  if (!ranking.weekly[week]) ranking.weekly[week] = {};
-  ranking.weekly[week][username] = giornata;
-  if (!ranking.global[username]) ranking.global[username] = { punti: 0, golFatti: 0, golSubiti: 0, diffReti: 0 };
-  ranking.global[username].punti += giornata.punti;
-  ranking.global[username].golFatti += giornata.golFatti;
-  ranking.global[username].golSubiti += giornata.golSubiti;
-  ranking.global[username].diffReti = ranking.global[username].golFatti - ranking.global[username].golSubiti;
-  saveRankingData(ranking);
-  res.json({ ok: true, giornata, globale: ranking.global[username] });
+app.post('/update-ranking', async (req, res) => {
+  try {
+    const { username, clubsSchierati, results, week } = req.body;
+    if (!username || !clubsSchierati || !results || !week) return res.status(400).json({ error: 'Dati mancanti' });
+    const ranking = await loadRankingData();
+    const giornata = calcolaPunteggioGiornata(clubsSchierati, results);
+    if (!ranking.weekly[week]) ranking.weekly[week] = {};
+    ranking.weekly[week][username] = giornata;
+    if (!ranking.global[username]) ranking.global[username] = { punti: 0, golFatti: 0, golSubiti: 0, diffReti: 0 };
+    ranking.global[username].punti += giornata.punti;
+    ranking.global[username].golFatti += giornata.golFatti;
+    ranking.global[username].golSubiti += giornata.golSubiti;
+    ranking.global[username].diffReti = ranking.global[username].golFatti - ranking.global[username].golSubiti;
+    await saveRankingData(ranking);
+    res.json({ ok: true, giornata, globale: ranking.global[username] });
+  } catch (e) {
+    res.status(500).json({ error: 'Errore update-ranking' });
+  }
 });
 
 // ===== ROUTE MERCATO =====
@@ -322,70 +351,78 @@ function isMercatoOpen(now = new Date()) {
 // === LOGICA LIMITI CAMBI ===
 const MAX_CAMBI_PER_WINDOW = 6;
 
-app.post('/market/:username', (req, res) => {
-  const username = req.params.username;
-  const { credits, selected, confirmed, vendita, acquisto, valoreVendita, valoreAcquisto } = req.body;
-  if (!username) return res.status(400).json({ error: 'Username mancante' });
-  let data = loadMarketData();
-  // --- FASE INIZIALE: salvataggio sempre libero finché non confermato ---
-  if (!data.users[username] || !data.users[username].confirmed) {
-    data.users[username] = {
-      credits,
-      selected,
-      confirmed: !!confirmed,
-      cambi: data.users[username]?.cambi || 0,
-      lastWindow: data.users[username]?.lastWindow || null
-    };
-    saveMarketData(data);
-    return res.json({ ok: true });
-  }
-  // --- DOPO LA CONFERMA: applica logica finestre e cambi ---
-  if (!isMercatoOpen()) {
-    return res.status(403).json({ error: 'Mercato chiuso. Attendi la prossima finestra.' });
-  }
-  // Identifica la finestra attuale
-  const now = new Date();
-  const currentWindow = mercatoWindows.find(win => new Date(win.start) <= now && now <= new Date(win.end));
-  if (!currentWindow) {
-    return res.status(403).json({ error: 'Mercato chiuso. Attendi la prossima finestra.' });
-  }
-  // Reset cambi se nuova finestra
-  if (data.users[username].lastWindow !== currentWindow.start) {
-    data.users[username].cambi = 0;
-    data.users[username].lastWindow = currentWindow.start;
-  }
-  if (data.users[username].cambi >= MAX_CAMBI_PER_WINDOW) {
-    return res.status(403).json({ error: 'Hai già effettuato il numero massimo di cambi per questa finestra di mercato.' });
-  }
-  // Gestione crediti e cambi
-  if (vendita && valoreVendita) {
-    data.users[username].credits += valoreVendita;
-    data.users[username].cambi += 1;
-    for (const lega in data.users[username].selected) {
-      data.users[username].selected[lega] = data.users[username].selected[lega].filter(sq => sq !== vendita);
+app.post('/market/:username', async (req, res) => {
+  try {
+    const username = req.params.username;
+    const { credits, selected, confirmed, vendita, acquisto, valoreVendita, valoreAcquisto } = req.body;
+    if (!username) return res.status(400).json({ error: 'Username mancante' });
+    let data = await loadMarketData();
+    // --- FASE INIZIALE: salvataggio sempre libero finché non confermato ---
+    if (!data.users[username] || !data.users[username].confirmed) {
+      data.users[username] = {
+        credits,
+        selected,
+        confirmed: !!confirmed,
+        cambi: data.users[username]?.cambi || 0,
+        lastWindow: data.users[username]?.lastWindow || null
+      };
+      await saveMarketData(data);
+      return res.json({ ok: true });
     }
-  }
-  if (acquisto && valoreAcquisto) {
-    if (data.users[username].credits < valoreAcquisto) {
-      return res.status(400).json({ error: 'Crediti insufficienti per acquistare questa squadra.' });
+    // --- DOPO LA CONFERMA: applica logica finestre e cambi ---
+    if (!isMercatoOpen()) {
+      return res.status(403).json({ error: 'Mercato chiuso. Attendi la prossima finestra.' });
     }
-    data.users[username].credits -= valoreAcquisto;
-    data.users[username].cambi += 1;
-    if (!data.users[username].selected[acquisto.lega]) data.users[username].selected[acquisto.lega] = [];
-    data.users[username].selected[acquisto.lega].push(acquisto.nome);
+    // Identifica la finestra attuale
+    const now = new Date();
+    const currentWindow = mercatoWindows.find(win => new Date(win.start) <= now && now <= new Date(win.end));
+    if (!currentWindow) {
+      return res.status(403).json({ error: 'Mercato chiuso. Attendi la prossima finestra.' });
+    }
+    // Reset cambi se nuova finestra
+    if (data.users[username].lastWindow !== currentWindow.start) {
+      data.users[username].cambi = 0;
+      data.users[username].lastWindow = currentWindow.start;
+    }
+    if (data.users[username].cambi >= MAX_CAMBI_PER_WINDOW) {
+      return res.status(403).json({ error: 'Hai già effettuato il numero massimo di cambi per questa finestra di mercato.' });
+    }
+    // Gestione crediti e cambi
+    if (vendita && valoreVendita) {
+      data.users[username].credits += valoreVendita;
+      data.users[username].cambi += 1;
+      for (const lega in data.users[username].selected) {
+        data.users[username].selected[lega] = data.users[username].selected[lega].filter(sq => sq !== vendita);
+      }
+    }
+    if (acquisto && valoreAcquisto) {
+      if (data.users[username].credits < valoreAcquisto) {
+        return res.status(400).json({ error: 'Crediti insufficienti per acquistare questa squadra.' });
+      }
+      data.users[username].credits -= valoreAcquisto;
+      data.users[username].cambi += 1;
+      if (!data.users[username].selected[acquisto.lega]) data.users[username].selected[acquisto.lega] = [];
+      data.users[username].selected[acquisto.lega].push(acquisto.nome);
+    }
+    if (typeof confirmed !== 'undefined') {
+      data.users[username].confirmed = confirmed;
+    }
+    await saveMarketData(data);
+    res.json({ ok: true, credits: data.users[username].credits, cambi: data.users[username].cambi });
+  } catch (e) {
+    res.status(500).json({ error: 'Errore mercato' });
   }
-  if (typeof confirmed !== 'undefined') {
-    data.users[username].confirmed = confirmed;
-  }
-  saveMarketData(data);
-  res.json({ ok: true, credits: data.users[username].credits, cambi: data.users[username].cambi });
 });
-app.get('/market/:username', (req, res) => {
-  const username = req.params.username;
-  const data = loadMarketData();
-  const userData = data.users[username];
-  if (!userData) return res.status(404).json({ error: 'Nessun dato mercato per questo utente' });
-  res.json(userData);
+app.get('/market/:username', async (req, res) => {
+  try {
+    const username = req.params.username;
+    const data = await loadMarketData();
+    const userData = data.users[username];
+    if (!userData) return res.status(404).json({ error: 'Nessun dato mercato per questo utente' });
+    res.json(userData);
+  } catch (e) {
+    res.status(500).json({ error: 'Errore mercato get' });
+  }
 });
 
 // ===== ROUTE FOTO PROFILO =====
