@@ -5,6 +5,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { v2 as cloudinary } from 'cloudinary';
 import fs from 'fs';
+import { MongoClient } from 'mongodb';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
@@ -144,7 +145,17 @@ function getNextCommonWeekAndFirstMatch() {
 
 // ===== COSTANTI FILE =====
 const RANKING_FILE = path.join(__dirname, 'ranking-data.json');
-const DB_FILE = path.join(__dirname, 'db.json');
+const MONGO_URI = process.env.MONGO_URI || 'INSERISCI_LA_TUA_STRINGA_DI_CONNESSIONE_MONGODB_ATLAS';
+const MONGO_DB = process.env.MONGO_DB || 'fantaclub';
+let mongoClient, mongoDb;
+async function connectMongo() {
+  if (!mongoClient) {
+    mongoClient = new MongoClient(MONGO_URI);
+    await mongoClient.connect();
+    mongoDb = mongoClient.db(MONGO_DB);
+  }
+  return mongoDb;
+}
 const USERS_FILE = path.join(__dirname, 'users-profile-pics.json');
 const MARKET_FILE = path.join(__dirname, 'market-data.json');
 
@@ -171,12 +182,18 @@ function calcolaPunteggioGiornata(clubsSchierati, results) {
   const diffReti = golFatti - golSubiti;
   return { punti, golFatti, golSubiti, diffReti };
 }
-function loadDb() {
-  if (!fs.existsSync(DB_FILE)) return { users: [], markets: {} };
-  return JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+// Funzioni MongoDB utenti
+async function findUserByName(name) {
+  const db = await connectMongo();
+  return await db.collection('users').findOne({ name });
 }
-function saveDb(data) {
-  fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+async function findUserByEmail(email) {
+  const db = await connectMongo();
+  return await db.collection('users').findOne({ email });
+}
+async function insertUser(user) {
+  const db = await connectMongo();
+  await db.collection('users').insertOne(user);
 }
 function saveUserProfilePic(username, url) {
   let data = { users: {} };
@@ -219,29 +236,26 @@ cloudinary.config({
 });
 
 // ===== ROUTE UTENTI (LOGIN/REGISTER) =====
-app.post('/login', (req, res) => {
+app.post('/login', async (req, res) => {
   const { name, password } = req.body;
   if (!name || !password) return res.status(400).json({ error: 'Nome e password obbligatori' });
   if (typeof name !== 'string' || typeof password !== 'string') return res.status(400).json({ error: 'Input non valido' });
-  const db = loadDb();
-  const user = db.users.find(u => u.name === name);
+  const user = await findUserByName(name);
   if (!user) return res.status(401).json({ error: 'Credenziali non valide' });
   if (!bcrypt.compareSync(password, user.password)) return res.status(401).json({ error: 'Credenziali non valide' });
   const { password: _, ...userSafe } = user;
   res.json({ user: userSafe });
 });
-app.post('/register', (req, res) => {
+app.post('/register', async (req, res) => {
   const { name, email, password } = req.body;
   if (!name || !email || !password) return res.status(400).json({ error: 'Tutti i campi sono obbligatori' });
   if (typeof name !== 'string' || typeof email !== 'string' || typeof password !== 'string') return res.status(400).json({ error: 'Input non valido' });
   if (name.length < 3 || password.length < 6) return res.status(400).json({ error: 'Nome o password troppo corti' });
-  const db = loadDb();
-  if (db.users.find(u => u.name === name)) return res.status(409).json({ error: 'Nome profilo già registrato' });
-  if (db.users.find(u => u.email === email)) return res.status(409).json({ error: 'Email già registrata' });
+  if (await findUserByName(name)) return res.status(409).json({ error: 'Nome profilo già registrato' });
+  if (await findUserByEmail(email)) return res.status(409).json({ error: 'Email già registrata' });
   const hashedPassword = bcrypt.hashSync(password, 10);
   const newUser = { name, email, password: hashedPassword, id: name };
-  db.users.push(newUser);
-  saveDb(db);
+  await insertUser(newUser);
   const { password: _, ...userSafe } = newUser;
   res.json({ user: userSafe });
 });
