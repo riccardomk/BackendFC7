@@ -2,10 +2,12 @@
 // ===== IMPORTS ALL'INIZIO =====
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import { v2 as cloudinary } from 'cloudinary';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import bcrypt from 'bcryptjs';
 
 
 
@@ -199,8 +201,15 @@ function saveMarketData(data) {
 
 // ===== INIZIALIZZAZIONE APP =====
 const app = express();
+app.use(helmet());
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
+
+// ===== MIDDLEWARE DI GESTIONE ERRORI CENTRALIZZATA =====
+app.use((err, req, res, next) => {
+  console.error('Errore:', err.message);
+  res.status(500).json({ error: 'Errore interno del server. Riprova più tardi.' });
+});
 
 // ===== CONFIG CLOUDINARY =====
 cloudinary.config({
@@ -213,21 +222,28 @@ cloudinary.config({
 app.post('/login', (req, res) => {
   const { name, password } = req.body;
   if (!name || !password) return res.status(400).json({ error: 'Nome e password obbligatori' });
+  if (typeof name !== 'string' || typeof password !== 'string') return res.status(400).json({ error: 'Input non valido' });
   const db = loadDb();
-  const user = db.users.find(u => u.name === name && u.password === password);
+  const user = db.users.find(u => u.name === name);
   if (!user) return res.status(401).json({ error: 'Credenziali non valide' });
-  res.json({ user });
+  if (!bcrypt.compareSync(password, user.password)) return res.status(401).json({ error: 'Credenziali non valide' });
+  const { password: _, ...userSafe } = user;
+  res.json({ user: userSafe });
 });
 app.post('/register', (req, res) => {
   const { name, email, password } = req.body;
   if (!name || !email || !password) return res.status(400).json({ error: 'Tutti i campi sono obbligatori' });
+  if (typeof name !== 'string' || typeof email !== 'string' || typeof password !== 'string') return res.status(400).json({ error: 'Input non valido' });
+  if (name.length < 3 || password.length < 6) return res.status(400).json({ error: 'Nome o password troppo corti' });
   const db = loadDb();
   if (db.users.find(u => u.name === name)) return res.status(409).json({ error: 'Nome profilo già registrato' });
   if (db.users.find(u => u.email === email)) return res.status(409).json({ error: 'Email già registrata' });
-  const newUser = { name, email, password, id: name };
+  const hashedPassword = bcrypt.hashSync(password, 10);
+  const newUser = { name, email, password: hashedPassword, id: name };
   db.users.push(newUser);
   saveDb(db);
-  res.json({ user: newUser });
+  const { password: _, ...userSafe } = newUser;
+  res.json({ user: userSafe });
 });
 
 // ===== ROUTE RANKING =====
