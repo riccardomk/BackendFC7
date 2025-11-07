@@ -267,6 +267,17 @@ app.post('/register', async (req, res) => {
   if (!name || !email || !password) return res.status(400).json({ error: 'Tutti i campi sono obbligatori' });
   if (typeof name !== 'string' || typeof email !== 'string' || typeof password !== 'string') return res.status(400).json({ error: 'Input non valido' });
   if (name.length < 3 || password.length < 6) return res.status(400).json({ error: 'Nome o password troppo corti' });
+  // Blocco nomi vietati
+  const forbidden = [
+    // Italiano
+    'dio', 'gesu', 'madonna', 'cristo', 'porco', 'bestemmia', 'cane', 'merda', 'culo', 'puttana', 'troia', 'vaffanculo', 'stronzo', 'bastardo', 'coglione', 'idiota', 'stupido', 'deficiente', 'cretino', 'scemo', 'pene', 'vagina', 'sesso', 'porn', 'fanculo', 'suca', 'minchia', 'maledetto', 'inferno', 'satan', 'lucifero', 'diavolo', 'demonio', 'blasfemia',
+    // Inglese (solo le peggiori)
+    'fuck', 'shit', 'bitch', 'asshole', 'bastard', 'dick', 'pussy', 'cunt', 'slut', 'whore', 'fag', 'nigger', 'negro', 'faggot', 'rape'
+  ];
+  const lowerName = name.toLowerCase();
+  if (forbidden.some(word => lowerName.includes(word))) {
+    return res.status(400).json({ error: 'Nome utente non consentito.' });
+  }
   if (await findUserByName(name)) return res.status(409).json({ error: 'Nome profilo già registrato' });
   if (await findUserByEmail(email)) return res.status(409).json({ error: 'Email già registrata' });
   const hashedPassword = bcrypt.hashSync(password, 10);
