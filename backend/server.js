@@ -466,15 +466,20 @@ app.get('/profile-pic/:username', (req, res) => {
 });
 
 // ===== ROUTE FORMAZIONE: Salva la formazione confermata per utente =====
-import formationFs from 'fs';
-const FORMATION_FILE = path.join(__dirname, 'formation-data.json');
-
-function loadFormationData() {
-  if (!formationFs.existsSync(FORMATION_FILE)) return {};
-  return JSON.parse(formationFs.readFileSync(FORMATION_FILE, 'utf8'));
+// Gestione formazione su MongoDB
+async function loadFormationData() {
+  const db = await connectMongo();
+  const doc = await db.collection('formation').findOne({ _id: 'main' });
+  if (!doc) return {};
+  return doc.data || {};
 }
-function saveFormationData(data) {
-  formationFs.writeFileSync(FORMATION_FILE, JSON.stringify(data, null, 2));
+async function saveFormationData(data) {
+  const db = await connectMongo();
+  await db.collection('formation').updateOne(
+    { _id: 'main' },
+    { $set: { data } },
+    { upsert: true }
+  );
 }
 
 // Salva la formazione solo se non già confermata per il turno
@@ -508,15 +513,15 @@ app.post('/formation/:userId', (req, res) => {
     if (!valid) {
       return res.status(400).json({ error: 'Almeno un club non è stato acquistato dal mercato' });
     }
-    // Carica formazioni già inviate
-    const formationData = loadFormationData();
+    // Carica formazioni già inviate (online)
+    const formationData = await loadFormationData();
     // Permetti sempre la sovrascrittura fino alla deadline
     formationData[userId] = {
       starters,
       confirmed: true,
       timestamp: new Date().toISOString()
     };
-    saveFormationData(formationData);
+    await saveFormationData(formationData);
     res.json({ ok: true, starters });
   })();
 });
@@ -560,12 +565,14 @@ app.get('/formation/diagnostics', (req, res) => {
 
 // Route GET per recuperare la formazione confermata di un utente
 app.get('/formation/:userId', (req, res) => {
-  const userId = req.params.userId;
-  const formationData = loadFormationData();
-  if (!formationData[userId]) {
-    return res.status(404).json({ error: 'Nessuna formazione confermata trovata' });
-  }
-  res.json(formationData[userId]);
+  (async () => {
+    const userId = req.params.userId;
+    const formationData = await loadFormationData();
+    if (!formationData[userId]) {
+      return res.status(404).json({ error: 'Nessuna formazione confermata trovata' });
+    }
+    res.json(formationData[userId]);
+  })();
 });
 
 // ===== AVVIO SERVER =====
