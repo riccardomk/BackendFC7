@@ -260,6 +260,10 @@ cloudinary.config({
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
+// Log di verifica variabili Cloudinary
+console.log('CLOUDINARY_CLOUD_NAME:', process.env.CLOUDINARY_CLOUD_NAME);
+console.log('CLOUDINARY_API_KEY:', process.env.CLOUDINARY_API_KEY);
+console.log('CLOUDINARY_API_SECRET:', process.env.CLOUDINARY_API_SECRET ? '[PRESENTE]' : '[MANCANTE]');
 
 // ===== ROUTE UTENTI (LOGIN/REGISTER) =====
 app.post('/login', async (req, res) => {
