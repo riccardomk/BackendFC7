@@ -494,29 +494,31 @@ app.post('/formation/:userId', (req, res) => {
   if (now > limite) {
     return res.status(403).json({ error: 'Tempo scaduto: la formazione poteva essere inviata solo fino a 30 minuti prima della prima partita.' });
   }
-  // Leggi mercato per validare club posseduti
-  const marketData = loadMarketData();
-  const userMarket = marketData.users[userId];
-  if (!userMarket || !userMarket.selected) {
-    return res.status(400).json({ error: 'Nessun club acquistato dal mercato' });
-  }
-  // Appiattisci tutti i club acquistati
-  const allOwnedClubs = Object.values(userMarket.selected).flat();
-  // Verifica che tutti i club schierati siano tra quelli acquistati
-  const valid = starters.every(club => allOwnedClubs.includes(club));
-  if (!valid) {
-    return res.status(400).json({ error: 'Almeno un club non è stato acquistato dal mercato' });
-  }
-  // Carica formazioni già inviate
-  const formationData = loadFormationData();
-  // Permetti sempre la sovrascrittura fino alla deadline
-  formationData[userId] = {
-    starters,
-    confirmed: true,
-    timestamp: new Date().toISOString()
-  };
-  saveFormationData(formationData);
-  res.json({ ok: true, starters });
+  (async () => {
+    // Leggi mercato per validare club posseduti (online)
+    const marketData = await loadMarketData();
+    const userMarket = marketData.users[userId];
+    if (!userMarket || !userMarket.selected) {
+      return res.status(400).json({ error: 'Nessun club acquistato dal mercato' });
+    }
+    // Appiattisci tutti i club acquistati
+    const allOwnedClubs = Object.values(userMarket.selected).flat();
+    // Verifica che tutti i club schierati siano tra quelli acquistati
+    const valid = starters.every(club => allOwnedClubs.includes(club));
+    if (!valid) {
+      return res.status(400).json({ error: 'Almeno un club non è stato acquistato dal mercato' });
+    }
+    // Carica formazioni già inviate
+    const formationData = loadFormationData();
+    // Permetti sempre la sovrascrittura fino alla deadline
+    formationData[userId] = {
+      starters,
+      confirmed: true,
+      timestamp: new Date().toISOString()
+    };
+    saveFormationData(formationData);
+    res.json({ ok: true, starters });
+  })();
 });
 
 
