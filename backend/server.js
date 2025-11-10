@@ -205,11 +205,21 @@ async function insertUser(user) {
 }
 function saveUserProfilePic(username, url) {
   let data = { users: {} };
-  if (fs.existsSync(USERS_FILE)) {
-    data = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
+  try {
+    if (fs.existsSync(USERS_FILE)) {
+      data = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
+    }
+  } catch (readErr) {
+    console.error('Errore lettura file foto profilo:', readErr.message, readErr);
+    throw readErr;
   }
   data.users[username] = url;
-  fs.writeFileSync(USERS_FILE, JSON.stringify(data, null, 2));
+  try {
+    fs.writeFileSync(USERS_FILE, JSON.stringify(data, null, 2));
+  } catch (writeErr) {
+    console.error('Errore scrittura file foto profilo:', writeErr.message, writeErr);
+    throw writeErr;
+  }
 }
 function getUserProfilePic(username) {
   if (!fs.existsSync(USERS_FILE)) return null;
@@ -441,16 +451,29 @@ app.post('/upload-profile-pic', async (req, res) => {
   try {
     const { image, username } = req.body;
     if (!image || !username) {
+      console.error('Upload foto profilo: immagine o username mancante', { image, username });
       return res.status(400).json({ error: 'Immagine o username mancante' });
     }
-    const uploadRes = await cloudinary.uploader.upload(image, {
-      folder: 'profile_pics',
-      overwrite: true,
-      resource_type: 'image',
-    });
-    saveUserProfilePic(username, uploadRes.secure_url);
+    let uploadRes;
+    try {
+      uploadRes = await cloudinary.uploader.upload(image, {
+        folder: 'profile_pics',
+        overwrite: true,
+        resource_type: 'image',
+      });
+    } catch (cloudErr) {
+      console.error('Errore Cloudinary:', cloudErr.message, cloudErr);
+      return res.status(500).json({ error: 'Errore Cloudinary: ' + cloudErr.message });
+    }
+    try {
+      saveUserProfilePic(username, uploadRes.secure_url);
+    } catch (saveErr) {
+      console.error('Errore salvataggio URL foto profilo:', saveErr.message, saveErr);
+      return res.status(500).json({ error: 'Errore salvataggio foto profilo: ' + saveErr.message });
+    }
     res.json({ url: uploadRes.secure_url });
   } catch (error) {
+    console.error('Errore generico upload foto profilo:', error.message, error);
     res.status(500).json({ error: 'Errore durante l\'upload: ' + error.message });
   }
 });
