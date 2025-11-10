@@ -266,6 +266,16 @@ console.log('CLOUDINARY_API_KEY:', process.env.CLOUDINARY_API_KEY);
 console.log('CLOUDINARY_API_SECRET:', process.env.CLOUDINARY_API_SECRET ? '[PRESENTE]' : '[MANCANTE]');
 
 // ===== ROUTE UTENTI (LOGIN/REGISTER) =====
+// ===== ROUTE VERIFICA PASSWORD =====
+app.post('/verify-password', async (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) return res.status(400).json({ success: false, error: 'Username e password obbligatori' });
+  if (typeof username !== 'string' || typeof password !== 'string') return res.status(400).json({ success: false, error: 'Input non valido' });
+  const user = await findUserByName(username);
+  if (!user) return res.status(401).json({ success: false, error: 'Credenziali non valide' });
+  if (!bcrypt.compareSync(password, user.password)) return res.status(401).json({ success: false, error: 'Credenziali non valide' });
+  return res.json({ success: true });
+});
 app.post('/login', async (req, res) => {
   const { name, password } = req.body;
   if (!name || !password) return res.status(400).json({ error: 'Nome e password obbligatori' });
