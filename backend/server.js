@@ -348,11 +348,13 @@ app.post('/login', async (req, res) => {
   if (!bcrypt.compareSync(password, user.password)) return res.status(401).json({ error: 'Credenziali non valide' });
   // Aggiorna fcmToken se presente
   if (fcmToken) {
+    console.log('[DEBUG] /login received fcmToken for', name, '->', fcmToken);
     const db = await connectMongo();
-    await db.collection('users').updateOne(
+    const updateRes = await db.collection('users').updateOne(
       { name },
       { $set: { fcmToken } }
     );
+    console.log('[DEBUG] /login updateOne result for', name, updateRes.result || updateRes);
   }
   const { password: _, ...userSafe } = user;
   res.json({ user: userSafe });
@@ -376,9 +378,11 @@ app.post('/register', async (req, res) => {
   const newUser = { name, email, password: hashedPassword, id: name };
   // Salva fcmToken se presente
   if (fcmToken) {
+    console.log('[DEBUG] /register received fcmToken for', name, '->', fcmToken);
     newUser.fcmToken = fcmToken;
   }
   await insertUser(newUser);
+  console.log('[DEBUG] /register inserted user', name, { id: newUser.id, fcmToken: newUser.fcmToken ? 'SET' : 'NULL' });
   const { password: _, ...userSafe } = newUser;
   res.json({ user: userSafe });
 });
@@ -598,12 +602,14 @@ app.post('/upload-profile-pic', async (req, res) => {
 app.post('/register-fcm-token', async (req, res) => {
   const { username, fcmToken } = req.body;
   if (!username || !fcmToken) return res.status(400).json({ error: 'Dati mancanti' });
+  console.log('[DEBUG] /register-fcm-token body:', req.body);
   const db = await connectMongo();
-  await db.collection('users').updateOne(
+  const upd = await db.collection('users').updateOne(
     { name: username },
     { $set: { fcmToken } },
     { upsert: true }
   );
+  console.log('[DEBUG] /register-fcm-token updateOne result for', username, upd.result || upd);
   res.json({ ok: true });
 });
 
