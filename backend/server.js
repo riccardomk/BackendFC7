@@ -382,6 +382,34 @@ const mercatoWindows = [
 function isMercatoOpen(now = new Date()) {
   return mercatoWindows.some(win => new Date(win.start) <= now && now <= new Date(win.end));
 }
+  // === LOGICA AGGIORNAMENTO VALORI SQUADRE IN BASE ALLA CLASSIFICA ===
+  async function aggiornaValoriSquadreMercato() {
+    // Carica ranking globale
+    const ranking = await loadRankingData();
+    // Carica dati mercato
+    let marketData = await loadMarketData();
+    // Ottieni array ordinato per posizione
+    const arr = Object.entries(ranking.global).map(([username, stats]) => ({ username, ...stats }));
+    arr.sort((a, b) => {
+      if (b.punti !== a.punti) return b.punti - a.punti;
+      if (b.diffReti !== a.diffReti) return b.diffReti - a.diffReti;
+      return b.golFatti - a.golFatti;
+    });
+    // Esempio: tabella valori per posizione (personalizza come vuoi)
+    const valoriPerPosizione = [20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
+    // Aggiorna valore per ogni squadra in base alla posizione
+    arr.forEach((user, idx) => {
+      // Trova la squadra associata all'utente (se la struttura lo consente)
+      // Qui si assume che ogni username sia una squadra, altrimenti adatta la logica
+      const squadra = user.username;
+      const valore = valoriPerPosizione[idx] || 1;
+      if (!marketData.squadre) marketData.squadre = {};
+      if (!marketData.squadre[squadra]) marketData.squadre[squadra] = {};
+      marketData.squadre[squadra].valoreAcquisto = valore;
+    });
+    await saveMarketData(marketData);
+    console.log('Valori squadre aggiornati in base alla classifica!');
+  }
 
 // === LOGICA LIMITI CAMBI ===
 const MAX_CAMBI_PER_WINDOW = 6;
@@ -418,6 +446,8 @@ app.post('/market/:username', async (req, res) => {
     if (data.users[username].lastWindow !== currentWindow.start) {
       data.users[username].cambi = 0;
       data.users[username].lastWindow = currentWindow.start;
+        // Aggiorna valori di mercato delle squadre in base alla classifica
+        await aggiornaValoriSquadreMercato();
     }
     if (data.users[username].cambi >= MAX_CAMBI_PER_WINDOW) {
       return res.status(403).json({ error: 'Hai già effettuato il numero massimo di cambi per questa finestra di mercato.' });
