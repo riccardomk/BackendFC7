@@ -15,51 +15,100 @@ import bcrypt from 'bcryptjs';
 // Configurazione FCM - USA API LEGACY (più semplice)
 const FCM_SERVER_KEY = process.env.FCM_SERVER_KEY;
 
-// Funzione per inviare una notifica push tramite FCM API LEGACY
+// Funzione IBRIDA per inviare notifica push - tenta Legacy poi passa a v1
 async function sendPushNotification(token, title, body, data = {}) {
   if (!FCM_SERVER_KEY) {
     throw new Error('FCM_SERVER_KEY non configurato');
   }
   
-  // Struttura API legacy (più semplice)
-  const message = {
-    to: token,
-    notification: {
-      title,
-      body,
-      sound: 'default',
-      click_action: 'FLUTTER_NOTIFICATION_CLICK'
-    },
-    data: {
-      ...data,
-      click_action: 'FLUTTER_NOTIFICATION_CLICK'
-    }
-  };
-  
-  console.log('Invio FCM LEGACY con Server Key:', FCM_SERVER_KEY ? 'Configurato' : 'MANCANTE');
-  console.log('Token destinatario:', token.substring(0, 20) + '...');
-  
-  const res = await fetch('https://fcm.googleapis.com/fcm/send', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `key=${FCM_SERVER_KEY}`
-    },
-    body: JSON.stringify(message)
-  });
-  
-  const result = await res.json();
-  
-  if (!res.ok) {
-    console.error('❌ Errore risposta FCM legacy:', {
-      status: res.status,
-      statusText: res.statusText,
-      result: result
+  // TENTATIVO 1: API LEGACY (più semplice)
+  try {
+    console.log('🔄 Tentativo FCM LEGACY...');
+    
+    const legacyMessage = {
+      to: token,
+      notification: {
+        title,
+        body,
+        sound: 'default',
+        click_action: 'FLUTTER_NOTIFICATION_CLICK'
+      },
+      data: {
+        ...data,
+        click_action: 'FLUTTER_NOTIFICATION_CLICK'
+      }
+    };
+    
+    const legacyRes = await fetch('https://fcm.googleapis.com/fcm/send', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `key=${FCM_SERVER_KEY}`
+      },
+      body: JSON.stringify(legacyMessage)
     });
-    throw new Error(`FCM Legacy Error: ${result.error || 'Unknown error'}`);
-  } else {
-    console.log('✅ Notifica FCM legacy inviata:', result);
-    return result;
+    
+    const legacyResult = await legacyRes.json();
+    
+    if (legacyRes.ok && legacyResult.success === 1) {
+      console.log('✅ Notifica FCM LEGACY inviata con successo:', legacyResult);
+      return legacyResult;
+    } else {
+      console.log('⚠️ FCM Legacy fallita, provo v1 API...');
+    }
+  } catch (legacyError) {
+    console.log('⚠️ FCM Legacy error, fallback a v1:', legacyError.message);
+  }
+  
+  // TENTATIVO 2: API v1 (fallback)
+  try {
+    console.log('🔄 Tentativo FCM v1 API...');
+    
+    const v1Message = {
+      message: {
+        token: token,
+        notification: {
+          title: title,
+          body: body
+        },
+        data: {
+          ...data,
+          click_action: 'FLUTTER_NOTIFICATION_CLICK'
+        },
+        android: {
+          notification: {
+            sound: 'default',
+            click_action: 'FLUTTER_NOTIFICATION_CLICK'
+          }
+        }
+      }
+    };
+    
+    const v1Res = await fetch('https://fcm.googleapis.com/v1/projects/fantafc-12c98/messages:send', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${FCM_SERVER_KEY}` // Prova con Bearer token
+      },
+      body: JSON.stringify(v1Message)
+    });
+    
+    const v1Result = await v1Res.json();
+    
+    if (v1Res.ok) {
+      console.log('✅ Notifica FCM v1 inviata con successo:', v1Result);
+      return v1Result;
+    } else {
+      console.error('❌ Errore FCM v1:', {
+        status: v1Res.status,
+        statusText: v1Res.statusText,
+        result: v1Result
+      });
+      throw new Error(`FCM v1 Error: ${v1Result.error?.message || 'Unknown error'}`);
+    }
+  } catch (v1Error) {
+    console.error('❌ Errore FCM v1:', v1Error.message);
+    throw new Error(`Entrambe le API FCM fallite: ${v1Error.message}`);
   }
 }
 
