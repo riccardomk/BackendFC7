@@ -17,6 +17,10 @@ const FCM_SERVER_KEY = process.env.FCM_SERVER_KEY;
 
 // Funzione per inviare una notifica push tramite FCM
 async function sendPushNotification(token, title, body, data = {}) {
+  if (!FCM_SERVER_KEY) {
+    throw new Error('FCM_SERVER_KEY non configurato');
+  }
+  
   const message = {
     to: token,
     notification: {
@@ -25,6 +29,9 @@ async function sendPushNotification(token, title, body, data = {}) {
     },
     data
   };
+  
+  console.log('Invio FCM con Server Key:', FCM_SERVER_KEY ? 'Configurato' : 'MANCANTE');
+  
   const res = await fetch('https://fcm.googleapis.com/fcm/send', {
     method: 'POST',
     headers: {
@@ -33,11 +40,19 @@ async function sendPushNotification(token, title, body, data = {}) {
     },
     body: JSON.stringify(message)
   });
+  
   const result = await res.json();
+  
   if (!res.ok) {
-    console.error('Errore invio FCM:', result);
+    console.error('❌ Errore risposta FCM:', {
+      status: res.status,
+      statusText: res.statusText,
+      result: result
+    });
+    throw new Error(`FCM Error: ${result.error || 'Unknown error'}`);
   } else {
-    console.log('Notifica FCM inviata:', result);
+    console.log('✅ Notifica FCM inviata con successo:', result);
+    return result;
   }
 }
 
@@ -284,8 +299,12 @@ app.post('/admin/send-test-notification-all', async (req, res) => {
   const db = await connectMongo();
   const users = await db.collection('users').find({ fcmToken: { $exists: true } }).toArray();
   let success = 0, fail = 0;
+  
+  console.log(`Trovati ${users.length} utenti con token FCM`);
+  
   for (const user of users) {
     try {
+      console.log(`Invio notifica a: ${user.name}, token: ${user.fcmToken.substring(0, 20)}...`);
       await sendPushNotification(
         user.fcmToken,
         'Schiera la tua squadra!',
@@ -293,10 +312,13 @@ app.post('/admin/send-test-notification-all', async (req, res) => {
         { type: 'reminder_formazione' }
       );
       success++;
+      console.log(`✅ Notifica inviata con successo a ${user.name}`);
     } catch (e) {
+      console.error(`❌ Errore invio notifica a ${user.name}:`, e.message);
       fail++;
     }
   }
+  console.log(`Risultato finale: ${success} successi, ${fail} fallimenti`);
   res.json({ ok: true, sent: success, failed: fail });
 });
 
