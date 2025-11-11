@@ -643,9 +643,19 @@ app.post('/admin/reset-stagione', async (req, res) => {
     const storicoPath = path.join(__dirname, `ranking-storico-${year}.json`);
     fs.writeFileSync(storicoPath, JSON.stringify(ranking, null, 2));
 
-    // 2. Aggiorna la lista delle squadre acquistabili (solo partecipanti massima lega)
-    // Supponiamo che la lista delle squadre partecipanti sia fornita da req.body.squadreMassimaLega (array di nomi)
-    const squadreMassimaLega = req.body.squadreMassimaLega || [];
+    // 2. Recupera automaticamente le squadre partecipanti ai 5 campionati
+    const LEAGUE_CODES = ['SA', 'PL', 'PD', 'BL1', 'FL1'];
+    let squadreMassimaLega = [];
+    for (const code of LEAGUE_CODES) {
+      const url = `https://api.football-data.org/v4/competitions/${code}/teams?season=${year}`;
+      const res = await fetch(url, { headers: { 'X-Auth-Token': FOOTBALL_DATA_TOKEN } });
+      if (res.ok) {
+        const data = await res.json();
+        const teams = data.teams.map(t => t.name);
+        squadreMassimaLega = squadreMassimaLega.concat(teams);
+      }
+    }
+
     let marketData = await loadMarketData();
     marketData.squadre = marketData.squadre || {};
     // Rimuovi squadre retrocesse
