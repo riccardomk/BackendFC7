@@ -12,8 +12,9 @@ import bcrypt from 'bcryptjs';
 // ===== IMPORT FCM (Firebase Cloud Messaging) =====
 // import fetch from 'node-fetch'; // rimosso, gestito sotto
 
-// Configurazione FCM - USA API LEGACY (più semplice)
+// Configurazione FCM - USA ENTRAMBE LE CHIAVI
 const FCM_SERVER_KEY = process.env.FCM_SERVER_KEY;
+const WEB_API_KEY = process.env.WEB_API_KEY || 'AIzaSyAoxpvWt3LQBNFopADnyD_5eYF9yHug6hY';
 
 // Funzione IBRIDA per inviare notifica push - tenta Legacy poi passa a v1
 async function sendPushNotification(token, title, body, data = {}) {
@@ -21,23 +22,27 @@ async function sendPushNotification(token, title, body, data = {}) {
     throw new Error('FCM_SERVER_KEY non configurato');
   }
   
-  // TENTATIVO 1: API LEGACY (più semplice)
+  // TENTATIVO 1: API LEGACY con logging dettagliato
   try {
     console.log('🔄 Tentativo FCM LEGACY...');
+    console.log('📧 Server Key:', FCM_SERVER_KEY ? FCM_SERVER_KEY.substring(0, 10) + '...' : 'MANCANTE');
+    console.log('📱 Token destinatario:', token.substring(0, 30) + '...');
     
     const legacyMessage = {
       to: token,
       notification: {
         title,
         body,
-        sound: 'default',
-        click_action: 'FLUTTER_NOTIFICATION_CLICK'
+        sound: 'default'
       },
       data: {
         ...data,
         click_action: 'FLUTTER_NOTIFICATION_CLICK'
-      }
+      },
+      priority: 'high'
     };
+    
+    console.log('📤 Messaggio FCM Legacy:', JSON.stringify(legacyMessage, null, 2));
     
     const legacyRes = await fetch('https://fcm.googleapis.com/fcm/send', {
       method: 'POST',
@@ -50,14 +55,21 @@ async function sendPushNotification(token, title, body, data = {}) {
     
     const legacyResult = await legacyRes.json();
     
-    if (legacyRes.ok && legacyResult.success === 1) {
-      console.log('✅ Notifica FCM LEGACY inviata con successo:', legacyResult);
+    console.log('📥 Risposta FCM Legacy Status:', legacyRes.status);
+    console.log('📥 Risposta FCM Legacy Result:', JSON.stringify(legacyResult, null, 2));
+    
+    if (legacyRes.ok && legacyResult.success >= 1) {
+      console.log('✅ Notifica FCM LEGACY inviata con successo!');
       return legacyResult;
     } else {
-      console.log('⚠️ FCM Legacy fallita, provo v1 API...');
+      console.log('⚠️ FCM Legacy fallita, dettagli completi:', {
+        status: legacyRes.status,
+        ok: legacyRes.ok,
+        result: legacyResult
+      });
     }
   } catch (legacyError) {
-    console.log('⚠️ FCM Legacy error, fallback a v1:', legacyError.message);
+    console.log('⚠️ FCM Legacy error completo:', legacyError);
   }
   
   // TENTATIVO 2: API v1 con Google API Key (fallback)  
