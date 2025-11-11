@@ -1,3 +1,11 @@
+// ===== IMPORTS ALL'INIZIO =====
+...existing code...
+// ===== INIZIALIZZAZIONE APP =====
+const app = express();
+app.use(helmet());
+app.use(cors());
+app.use(express.json({ limit: '10mb' }));
+...existing code...
 // ===== ROUTE ADMIN: INVIO NOTIFICA DI TEST A TUTTI =====
 app.post('/admin/send-test-notification-all', async (req, res) => {
   const db = await connectMongo();
@@ -37,7 +45,6 @@ app.post('/admin/send-test-notification', async (req, res) => {
     res.status(500).json({ error: 'Errore invio notifica', details: e.message });
   }
 });
-// ===== IMPORTS ALL'INIZIO =====
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
