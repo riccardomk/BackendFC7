@@ -279,6 +279,27 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
+// ===== ROUTE ADMIN: INVIO NOTIFICA DI TEST A TUTTI =====
+app.post('/admin/send-test-notification-all', async (req, res) => {
+  const db = await connectMongo();
+  const users = await db.collection('users').find({ fcmToken: { $exists: true } }).toArray();
+  let success = 0, fail = 0;
+  for (const user of users) {
+    try {
+      await sendPushNotification(
+        user.fcmToken,
+        'Schiera la tua squadra!',
+        'Ricordati di schierare la formazione per la prossima giornata.',
+        { type: 'reminder_formazione' }
+      );
+      success++;
+    } catch (e) {
+      fail++;
+    }
+  }
+  res.json({ ok: true, sent: success, failed: fail });
+});
+
 // ===== MIDDLEWARE DI GESTIONE ERRORI CENTRALIZZATA =====
 app.use((err, req, res, next) => {
   console.error('Errore:', err.message);
