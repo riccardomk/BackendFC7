@@ -300,6 +300,17 @@ app.post('/admin/send-test-notification-all', async (req, res) => {
   res.json({ ok: true, sent: success, failed: fail });
 });
 
+// ===== ROUTE ADMIN: LISTA UTENTI E STATO TOKEN FCM =====
+app.get('/admin/list-fcm-tokens', async (req, res) => {
+  const db = await connectMongo();
+  const users = await db.collection('users').find({}).toArray();
+  const result = users.map(u => ({
+    username: u.name,
+    fcmToken: u.fcmToken || null
+  }));
+  res.json({ utenti: result });
+});
+
 // ===== MIDDLEWARE DI GESTIONE ERRORI CENTRALIZZATA =====
 app.use((err, req, res, next) => {
   console.error('Errore:', err.message);
