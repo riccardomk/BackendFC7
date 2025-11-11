@@ -346,15 +346,16 @@ app.post('/login', async (req, res) => {
   const user = await findUserByName(name);
   if (!user) return res.status(401).json({ error: 'Credenziali non valide' });
   if (!bcrypt.compareSync(password, user.password)) return res.status(401).json({ error: 'Credenziali non valide' });
-  // Aggiorna fcmToken se presente
-  if (fcmToken) {
-    console.log('[DEBUG] /login received fcmToken for', name, '->', fcmToken);
+  // Aggiorna fcmToken solo se è una stringa valida (non finto, non null, non vuoto)
+  if (typeof fcmToken === 'string' && fcmToken && fcmToken.length > 30 && !fcmToken.startsWith('TEST_TOKEN')) {
+    console.log('[DEBUG] /login received fcmToken valido per', name, '->', fcmToken);
     const db = await connectMongo();
-    const updateRes = await db.collection('users').updateOne(
+    await db.collection('users').updateOne(
       { name },
       { $set: { fcmToken } }
     );
-    console.log('[DEBUG] /login updateOne result for', name, updateRes.result || updateRes);
+  } else {
+    console.log('[DEBUG] /login fcmToken ignorato (non valido):', fcmToken);
   }
   const { password: _, ...userSafe } = user;
   res.json({ user: userSafe });
@@ -376,10 +377,12 @@ app.post('/register', async (req, res) => {
   if (await findUserByEmail(email)) return res.status(409).json({ error: 'Email già registrata' });
   const hashedPassword = bcrypt.hashSync(password, 10);
   const newUser = { name, email, password: hashedPassword, id: name };
-  // Salva fcmToken se presente
-  if (fcmToken) {
-    console.log('[DEBUG] /register received fcmToken for', name, '->', fcmToken);
+  // Salva fcmToken solo se è una stringa valida (non finto, non null, non vuoto)
+  if (typeof fcmToken === 'string' && fcmToken && fcmToken.length > 30 && !fcmToken.startsWith('TEST_TOKEN')) {
+    console.log('[DEBUG] /register received fcmToken valido per', name, '->', fcmToken);
     newUser.fcmToken = fcmToken;
+  } else {
+    console.log('[DEBUG] /register fcmToken ignorato (non valido):', fcmToken);
   }
   await insertUser(newUser);
   console.log('[DEBUG] /register inserted user', name, { id: newUser.id, fcmToken: newUser.fcmToken ? 'SET' : 'NULL' });
