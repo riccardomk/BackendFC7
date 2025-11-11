@@ -1,4 +1,3 @@
-
 // ===== IMPORTS ALL'INIZIO =====
 import express from 'express';
 import cors from 'cors';
@@ -635,8 +634,48 @@ app.get('/formation/:userId', (req, res) => {
   res.json(formationData[userId]);
 });
 
+// ===== FUNZIONE RESET FINE STAGIONE =====
+app.post('/admin/reset-stagione', async (req, res) => {
+  try {
+    // 1. Salva lo storico delle classifiche
+    const ranking = await loadRankingData();
+    const year = new Date().getFullYear();
+    const storicoPath = path.join(__dirname, `ranking-storico-${year}.json`);
+    fs.writeFileSync(storicoPath, JSON.stringify(ranking, null, 2));
+
+    // 2. Aggiorna la lista delle squadre acquistabili (solo partecipanti massima lega)
+    // Supponiamo che la lista delle squadre partecipanti sia fornita da req.body.squadreMassimaLega (array di nomi)
+    const squadreMassimaLega = req.body.squadreMassimaLega || [];
+    let marketData = await loadMarketData();
+    marketData.squadre = marketData.squadre || {};
+    // Rimuovi squadre retrocesse
+    Object.keys(marketData.squadre).forEach(sq => {
+      if (!squadreMassimaLega.includes(sq)) {
+        delete marketData.squadre[sq];
+      }
+    });
+    // Aggiungi squadre promosse (se non già presenti)
+    squadreMassimaLega.forEach(sq => {
+      if (!marketData.squadre[sq]) {
+        marketData.squadre[sq] = { valoreAcquisto: 1 };
+      }
+    });
+    await saveMarketData(marketData);
+
+    // 3. Reset ranking e mercato
+    await saveRankingData({ global: {}, weekly: {} });
+    marketData.users = {};
+    await saveMarketData(marketData);
+
+    res.json({ ok: true, storico: storicoPath, squadreAcquistabili: squadreMassimaLega });
+  } catch (e) {
+    res.status(500).json({ error: 'Errore reset stagione', details: e.message });
+  }
+});
+
 // ===== AVVIO SERVER =====
 const PORT = process.env.PORT || 1000;
 app.listen(PORT, () => {
   console.log(`Server avviato sulla porta ${PORT}`);
 });
+
