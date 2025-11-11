@@ -340,26 +340,31 @@ app.post('/verify-password', async (req, res) => {
   return res.json({ success: true });
 });
 app.post('/login', async (req, res) => {
-  const { name, password } = req.body;
+  const { name, password, fcmToken } = req.body;
   if (!name || !password) return res.status(400).json({ error: 'Nome e password obbligatori' });
   if (typeof name !== 'string' || typeof password !== 'string') return res.status(400).json({ error: 'Input non valido' });
   const user = await findUserByName(name);
   if (!user) return res.status(401).json({ error: 'Credenziali non valide' });
   if (!bcrypt.compareSync(password, user.password)) return res.status(401).json({ error: 'Credenziali non valide' });
+  // Aggiorna fcmToken se presente
+  if (fcmToken) {
+    const db = await connectMongo();
+    await db.collection('users').updateOne(
+      { name },
+      { $set: { fcmToken } }
+    );
+  }
   const { password: _, ...userSafe } = user;
   res.json({ user: userSafe });
 });
 app.post('/register', async (req, res) => {
-  const { name, email, password } = req.body;
+  const { name, email, password, fcmToken } = req.body;
   if (!name || !email || !password) return res.status(400).json({ error: 'Tutti i campi sono obbligatori' });
   if (typeof name !== 'string' || typeof email !== 'string' || typeof password !== 'string') return res.status(400).json({ error: 'Input non valido' });
   if (name.length < 3 || password.length < 6) return res.status(400).json({ error: 'Nome o password troppo corti' });
   // Blocco nomi vietati
   const forbidden = [
-    // Italiano
-    'dio', 'gesu', 'madonna', 'cristo', 'porco', 'bestemmia', 'cane', 'merda', 'culo', 'puttana', 'troia', 'vaffanculo', 'stronzo', 'bastardo', 'coglione', 'idiota', 'stupido', 'deficiente', 'cretino', 'scemo', 'pene', 'vagina', 'sesso', 'porn', 'fanculo', 'suca', 'minchia', 'maledetto', 'inferno', 'satan', 'lucifero', 'diavolo', 'demonio', 'blasfemia',
-    // Inglese (solo le peggiori)
-    'fuck', 'shit', 'bitch', 'asshole', 'bastard', 'dick', 'pussy', 'cunt', 'slut', 'whore', 'fag', 'nigger', 'negro', 'faggot', 'rape'
+    // ...existing code...
   ];
   const lowerName = name.toLowerCase();
   if (forbidden.some(word => lowerName.includes(word))) {
@@ -369,6 +374,10 @@ app.post('/register', async (req, res) => {
   if (await findUserByEmail(email)) return res.status(409).json({ error: 'Email già registrata' });
   const hashedPassword = bcrypt.hashSync(password, 10);
   const newUser = { name, email, password: hashedPassword, id: name };
+  // Salva fcmToken se presente
+  if (fcmToken) {
+    newUser.fcmToken = fcmToken;
+  }
   await insertUser(newUser);
   const { password: _, ...userSafe } = newUser;
   res.json({ user: userSafe });
