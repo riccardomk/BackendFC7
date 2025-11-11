@@ -10,7 +10,7 @@ import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
 
 // ===== IMPORT FCM (Firebase Cloud Messaging) =====
-import fetch from 'node-fetch'; // già presente
+// import fetch from 'node-fetch'; // rimosso, gestito sotto
 
 // Configurazione FCM
 const FCM_SERVER_KEY = process.env.FCM_SERVER_KEY;
