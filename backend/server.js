@@ -60,9 +60,11 @@ async function sendPushNotification(token, title, body, data = {}) {
     console.log('⚠️ FCM Legacy error, fallback a v1:', legacyError.message);
   }
   
-  // TENTATIVO 2: API v1 (fallback)
+  // TENTATIVO 2: API v1 con Google API Key (fallback)  
   try {
-    console.log('🔄 Tentativo FCM v1 API...');
+    console.log('🔄 Tentativo FCM v1 con Google API Key...');
+    
+    const googleApiKey = 'AIzaSyAoxpvWt3LQBNFopADnyD_5eYF9yHug6hY'; // Da google-services.json
     
     const v1Message = {
       message: {
@@ -84,11 +86,10 @@ async function sendPushNotification(token, title, body, data = {}) {
       }
     };
     
-    const v1Res = await fetch('https://fcm.googleapis.com/v1/projects/fantafc-12c98/messages:send', {
+    const v1Res = await fetch(`https://fcm.googleapis.com/v1/projects/fantafc-12c98/messages:send?key=${googleApiKey}`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${FCM_SERVER_KEY}` // Prova con Bearer token
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify(v1Message)
     });
@@ -96,18 +97,18 @@ async function sendPushNotification(token, title, body, data = {}) {
     const v1Result = await v1Res.json();
     
     if (v1Res.ok) {
-      console.log('✅ Notifica FCM v1 inviata con successo:', v1Result);
+      console.log('✅ Notifica FCM v1 con Google API Key inviata:', v1Result);
       return v1Result;
     } else {
-      console.error('❌ Errore FCM v1:', {
+      console.error('❌ Errore FCM v1 Google API Key:', {
         status: v1Res.status,
         statusText: v1Res.statusText,
         result: v1Result
       });
-      throw new Error(`FCM v1 Error: ${v1Result.error?.message || 'Unknown error'}`);
+      throw new Error(`FCM v1 Google API Error: ${v1Result.error?.message || 'Unknown error'}`);
     }
   } catch (v1Error) {
-    console.error('❌ Errore FCM v1:', v1Error.message);
+    console.error('❌ Errore FCM v1 Google API Key:', v1Error.message);
     throw new Error(`Entrambe le API FCM fallite: ${v1Error.message}`);
   }
 }
