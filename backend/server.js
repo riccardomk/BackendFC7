@@ -12,35 +12,38 @@ import bcrypt from 'bcryptjs';
 // ===== IMPORT FCM (Firebase Cloud Messaging) =====
 // import fetch from 'node-fetch'; // rimosso, gestito sotto
 
-// Configurazione FCM - Aggiornato per API v1
+// Configurazione FCM - USA API LEGACY (più semplice)
 const FCM_SERVER_KEY = process.env.FCM_SERVER_KEY;
-const FIREBASE_PROJECT_ID = 'fantafc-12c98'; // ID del progetto Firebase
 
-// Funzione per inviare una notifica push tramite FCM API v1
+// Funzione per inviare una notifica push tramite FCM API LEGACY
 async function sendPushNotification(token, title, body, data = {}) {
   if (!FCM_SERVER_KEY) {
     throw new Error('FCM_SERVER_KEY non configurato');
   }
   
-  // Nuova struttura per API v1
+  // Struttura API legacy (più semplice)
   const message = {
-    message: {
-      token: token,
-      notification: {
-        title,
-        body
-      },
-      data
+    to: token,
+    notification: {
+      title,
+      body,
+      sound: 'default',
+      click_action: 'FLUTTER_NOTIFICATION_CLICK'
+    },
+    data: {
+      ...data,
+      click_action: 'FLUTTER_NOTIFICATION_CLICK'
     }
   };
   
-  console.log('Invio FCM v1 con Server Key:', FCM_SERVER_KEY ? 'Configurato' : 'MANCANTE');
+  console.log('Invio FCM LEGACY con Server Key:', FCM_SERVER_KEY ? 'Configurato' : 'MANCANTE');
+  console.log('Token destinatario:', token.substring(0, 20) + '...');
   
-  const res = await fetch(`https://fcm.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/messages:send`, {
+  const res = await fetch('https://fcm.googleapis.com/fcm/send', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${FCM_SERVER_KEY}`
+      'Authorization': `key=${FCM_SERVER_KEY}`
     },
     body: JSON.stringify(message)
   });
@@ -48,14 +51,14 @@ async function sendPushNotification(token, title, body, data = {}) {
   const result = await res.json();
   
   if (!res.ok) {
-    console.error('❌ Errore risposta FCM v1:', {
+    console.error('❌ Errore risposta FCM legacy:', {
       status: res.status,
       statusText: res.statusText,
       result: result
     });
-    throw new Error(`FCM v1 Error: ${result.error?.message || 'Unknown error'}`);
+    throw new Error(`FCM Legacy Error: ${result.error || 'Unknown error'}`);
   } else {
-    console.log('✅ Notifica FCM v1 inviata con successo:', result);
+    console.log('✅ Notifica FCM legacy inviata:', result);
     return result;
   }
 }
