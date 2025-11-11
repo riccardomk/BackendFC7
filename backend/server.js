@@ -12,31 +12,35 @@ import bcrypt from 'bcryptjs';
 // ===== IMPORT FCM (Firebase Cloud Messaging) =====
 // import fetch from 'node-fetch'; // rimosso, gestito sotto
 
-// Configurazione FCM
+// Configurazione FCM - Aggiornato per API v1
 const FCM_SERVER_KEY = process.env.FCM_SERVER_KEY;
+const FIREBASE_PROJECT_ID = 'fantafc-12c98'; // ID del progetto Firebase
 
-// Funzione per inviare una notifica push tramite FCM
+// Funzione per inviare una notifica push tramite FCM API v1
 async function sendPushNotification(token, title, body, data = {}) {
   if (!FCM_SERVER_KEY) {
     throw new Error('FCM_SERVER_KEY non configurato');
   }
   
+  // Nuova struttura per API v1
   const message = {
-    to: token,
-    notification: {
-      title,
-      body
-    },
-    data
+    message: {
+      token: token,
+      notification: {
+        title,
+        body
+      },
+      data
+    }
   };
   
-  console.log('Invio FCM con Server Key:', FCM_SERVER_KEY ? 'Configurato' : 'MANCANTE');
+  console.log('Invio FCM v1 con Server Key:', FCM_SERVER_KEY ? 'Configurato' : 'MANCANTE');
   
-  const res = await fetch('https://fcm.googleapis.com/fcm/send', {
+  const res = await fetch(`https://fcm.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/messages:send`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `key=${FCM_SERVER_KEY}`
+      'Authorization': `Bearer ${FCM_SERVER_KEY}`
     },
     body: JSON.stringify(message)
   });
@@ -44,14 +48,14 @@ async function sendPushNotification(token, title, body, data = {}) {
   const result = await res.json();
   
   if (!res.ok) {
-    console.error('❌ Errore risposta FCM:', {
+    console.error('❌ Errore risposta FCM v1:', {
       status: res.status,
       statusText: res.statusText,
       result: result
     });
-    throw new Error(`FCM Error: ${result.error || 'Unknown error'}`);
+    throw new Error(`FCM v1 Error: ${result.error?.message || 'Unknown error'}`);
   } else {
-    console.log('✅ Notifica FCM inviata con successo:', result);
+    console.log('✅ Notifica FCM v1 inviata con successo:', result);
     return result;
   }
 }
