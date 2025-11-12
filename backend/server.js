@@ -1169,6 +1169,74 @@ app.post('/admin/auto-update-current-week', async (req, res) => {
   }
 });
 
+// ===== ROUTE ADMIN: PULISCI UTENTE COMPLETAMENTE =====
+app.post('/admin/emergency-clean/:username', async (req, res) => {
+  try {
+    const username = req.params.username;
+    console.log(`🚨 PULIZIA EMERGENZA per: ${username}`);
+    
+    let cleaned = {
+      ranking_global: false,
+      ranking_weekly: 0,
+      market: false,
+      formations: false
+    };
+    
+    // 1. PULISCI RANKING (global + weekly)
+    const ranking = await loadRankingData();
+    
+    // Rimuovi da global
+    if (ranking.global && ranking.global[username]) {
+      delete ranking.global[username];
+      cleaned.ranking_global = true;
+      console.log(`✅ Rimosso ${username} da ranking globale`);
+    }
+    
+    // Rimuovi da tutti i weekly
+    if (ranking.weekly) {
+      for (const week in ranking.weekly) {
+        if (ranking.weekly[week] && ranking.weekly[week][username]) {
+          delete ranking.weekly[week][username];
+          cleaned.ranking_weekly++;
+        }
+      }
+      console.log(`✅ Rimosso ${username} da ${cleaned.ranking_weekly} ranking settimanali`);
+    }
+    
+    // Salva ranking pulito
+    await saveRankingData(ranking);
+    
+    // 2. PULISCI MARKET
+    const marketData = await loadMarketData();
+    if (marketData.users && marketData.users[username]) {
+      delete marketData.users[username];
+      cleaned.market = true;
+      console.log(`✅ Rimosso ${username} da market`);
+    }
+    await saveMarketData(marketData);
+    
+    // 3. PULISCI FORMATIONS (file locale)
+    const formationData = loadFormationData();
+    if (formationData[username]) {
+      delete formationData[username];
+      cleaned.formations = true;
+      console.log(`✅ Rimosso ${username} da formations`);
+    }
+    saveFormationData(formationData);
+    
+    console.log(`🎉 PULIZIA EMERGENZA COMPLETATA per ${username}`);
+    
+    res.json({ 
+      ok: true, 
+      message: `${username} completamente rimosso da ranking e market!`,
+      cleaned
+    });
+  } catch (e) {
+    console.error('Errore pulizia emergenza:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ===== FUNZIONE RESET FINE STAGIONE =====
 app.post('/admin/reset-stagione', async (req, res) => {
   try {
@@ -1386,4 +1454,5 @@ app.listen(PORT, () => {
   console.log(`Server avviato sulla porta ${PORT}`);
   console.log('🤖 Sistema automazione ranking attivato');
 });
+
 
