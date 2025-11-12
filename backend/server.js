@@ -333,28 +333,29 @@ async function insertUser(user) {
   const db = await connectMongo();
   await db.collection('users').insertOne(user);
 }
-function saveUserProfilePic(username, url) {
-  let data = { users: {} };
+async function saveUserProfilePic(username, url) {
   try {
-    if (fs.existsSync(USERS_FILE)) {
-      data = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
-    }
-  } catch (readErr) {
-    console.error('Errore lettura file foto profilo:', readErr.message, readErr);
-    throw readErr;
-  }
-  data.users[username] = url;
-  try {
-    fs.writeFileSync(USERS_FILE, JSON.stringify(data, null, 2));
-  } catch (writeErr) {
-    console.error('Errore scrittura file foto profilo:', writeErr.message, writeErr);
-    throw writeErr;
+    const db = await connectMongo();
+    await db.collection('users').updateOne(
+      { name: username },
+      { $set: { profilePicUrl: url } },
+      { upsert: false }
+    );
+    console.log(`✅ Foto profilo salvata per ${username}: ${url}`);
+  } catch (err) {
+    console.error('Errore salvataggio foto profilo MongoDB:', err.message, err);
+    throw err;
   }
 }
-function getUserProfilePic(username) {
-  if (!fs.existsSync(USERS_FILE)) return null;
-  const data = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
-  return data.users[username] || null;
+async function getUserProfilePic(username) {
+  try {
+    const db = await connectMongo();
+    const user = await db.collection('users').findOne({ name: username });
+    return user?.profilePicUrl || null;
+  } catch (err) {
+    console.error('Errore recupero foto profilo MongoDB:', err.message);
+    return null;
+  }
 }
 // Funzioni mercato su MongoDB
 async function loadMarketData() {
@@ -717,7 +718,7 @@ app.post('/upload-profile-pic', async (req, res) => {
       return res.status(500).json({ error: 'Errore Cloudinary: ' + cloudErr.message });
     }
     try {
-      saveUserProfilePic(username, uploadRes.secure_url);
+      await saveUserProfilePic(username, uploadRes.secure_url);
     } catch (saveErr) {
       console.error('Errore salvataggio URL foto profilo:', saveErr.message, saveErr);
       return res.status(500).json({ error: 'Errore salvataggio foto profilo: ' + saveErr.message });
@@ -744,9 +745,9 @@ app.post('/register-fcm-token', async (req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/profile-pic/:username', (req, res) => {
+app.get('/profile-pic/:username', async (req, res) => {
   const username = req.params.username;
-  const url = getUserProfilePic(username);
+  const url = await getUserProfilePic(username);
   if (url) {
     res.json({ url });
   } else {
@@ -1166,6 +1167,51 @@ app.post('/admin/auto-update-current-week', async (req, res) => {
       error: 'Errore aggiornamento automatico settimana corrente', 
       details: e.message 
     });
+  }
+});
+
+// ===== ROUTE ADMIN: MIGRAZIONE FOTO PROFILO DA FILE A DB =====
+app.post('/admin/migrate-profile-pics', async (req, res) => {
+  try {
+    console.log('🔄 INIZIO migrazione foto profilo da file a MongoDB...');
+    
+    // Controlla se il file esiste
+    if (!fs.existsSync(USERS_FILE)) {
+      return res.json({ ok: true, message: 'Nessun file da migrare', migrated: 0 });
+    }
+    
+    // Leggi il file delle foto profilo
+    const fileData = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
+    const users = fileData.users || {};
+    
+    let migrated = 0;
+    const db = await connectMongo();
+    
+    // Migra ogni foto nel database
+    for (const [username, photoUrl] of Object.entries(users)) {
+      try {
+        await db.collection('users').updateOne(
+          { name: username },
+          { $set: { profilePicUrl: photoUrl } }
+        );
+        console.log(`✅ Migrata foto per ${username}`);
+        migrated++;
+      } catch (err) {
+        console.error(`❌ Errore migrazione ${username}:`, err.message);
+      }
+    }
+    
+    console.log(`🎉 MIGRAZIONE COMPLETATA: ${migrated} foto migrate`);
+    
+    res.json({ 
+      ok: true, 
+      message: `${migrated} foto profilo migrate con successo nel database`,
+      migrated,
+      totalFound: Object.keys(users).length
+    });
+  } catch (e) {
+    console.error('❌ Errore migrazione foto profilo:', e.message);
+    res.status(500).json({ error: e.message });
   }
 });
 
