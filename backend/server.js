@@ -10,15 +10,16 @@ import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
 
 // ===== IMPORT FCM (Firebase Cloud Messaging) =====
-// import fetch from 'node-fetch'; // rimosso, gestito sotto
+import jwt from 'jsonwebtoken';
+import fetch from 'node-fetch';
 
-// Configurazione FCM - USA SERVICE ACCOUNT per HTTP v1 API
+// Configurazione FCM - USA SERVICE ACCOUNT per HTTP v1 API  
 const FCM_SERVER_KEY = process.env.FCM_SERVER_KEY; // Manteniamo per compatibilità
 const FCM_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'fantafc-12c98';
 
 // Service Account configurato dalle variabili d'ambiente
 const SERVICE_ACCOUNT = {
-  "type": "service_account",
+  "type": "service_account", 
   "project_id": FCM_PROJECT_ID,
   "private_key": process.env.FIREBASE_PRIVATE_KEY,
   "client_email": process.env.FIREBASE_CLIENT_EMAIL,
@@ -26,21 +27,8 @@ const SERVICE_ACCOUNT = {
   "token_uri": "https://oauth2.googleapis.com/token"
 };
 
-// Import dinamico di jsonwebtoken
-let jwt;
-
 // Funzione per generare token OAuth2 per Firebase HTTP v1 API
 async function getAccessToken() {
-  // Import dinamico di jsonwebtoken solo quando necessario
-  if (!jwt) {
-    try {
-      jwt = (await import('jsonwebtoken')).default;
-    } catch (e) {
-      console.error('❌ Errore import jsonwebtoken:', e.message);
-      throw new Error('jsonwebtoken non disponibile');
-    }
-  }
-  
   console.log('🔑 Generazione JWT per OAuth2...');
   console.log('📧 Client Email:', SERVICE_ACCOUNT.client_email);
   console.log('🔐 Private Key disponibile:', !!SERVICE_ACCOUNT.private_key);
@@ -158,16 +146,7 @@ async function sendPushNotification(token, title, body, data = {}) {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Import dinamico di fetch SOLO dopo che path è definito
-let fetch;
-try {
-  fetch = (await import('node-fetch')).default;
-} catch (e) {
-  console.error("node-fetch non trovato, provo a installarlo...");
-  const { execSync } = await import('child_process');
-  execSync('npm install node-fetch@3', { stdio: 'inherit' });
-  fetch = (await import('node-fetch')).default;
-}
+// fetch è già importato sopra con import statico
 
 const CALENDAR_FILES = {
   'Serie A': path.join(__dirname, 'calendar-seriea.json'),
