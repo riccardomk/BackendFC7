@@ -13,7 +13,7 @@ import { createRequire } from 'module';
 // ===== IMPORT FCM (Firebase Cloud Messaging) =====
 const require = createRequire(import.meta.url);
 const jwt = require('jsonwebtoken');
-import fetch from 'node-fetch';
+// fetch è già disponibile in Node.js 25+ come globale
 
 // Configurazione FCM - USA SERVICE ACCOUNT per HTTP v1 API  
 const FCM_SERVER_KEY = process.env.FCM_SERVER_KEY; // Manteniamo per compatibilità
