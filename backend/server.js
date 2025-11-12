@@ -384,13 +384,23 @@ app.post('/admin/send-test-notification-all', async (req, res) => {
   const users = await db.collection('users').find({ fcmToken: { $exists: true } }).toArray();
   let success = 0, fail = 0;
   
-  console.log(`Trovati ${users.length} utenti con token FCM`);
+  console.log(`Trovati ${users.length} utenti totali con token FCM`);
   
+  // Deduplicazione: raggruppa per token FCM unico per evitare duplicati
+  const uniqueTokens = new Map();
   for (const user of users) {
+    if (user.fcmToken && !uniqueTokens.has(user.fcmToken)) {
+      uniqueTokens.set(user.fcmToken, user);
+    }
+  }
+  
+  console.log(`Token FCM unici: ${uniqueTokens.size} (eliminati ${users.length - uniqueTokens.size} duplicati)`);
+  
+  for (const [token, user] of uniqueTokens) {
     try {
-      console.log(`Invio notifica a: ${user.name}, token: ${user.fcmToken.substring(0, 20)}...`);
+      console.log(`Invio notifica a: ${user.name}, token: ${token.substring(0, 20)}...`);
       await sendPushNotification(
-        user.fcmToken,
+        token,
         'Schiera la tua squadra!',
         'Ricordati di schierare la formazione per la prossima giornata.',
         { type: 'reminder_formazione' }
@@ -403,7 +413,7 @@ app.post('/admin/send-test-notification-all', async (req, res) => {
     }
   }
   console.log(`Risultato finale: ${success} successi, ${fail} fallimenti`);
-  res.json({ ok: true, sent: success, failed: fail });
+  res.json({ ok: true, sent: success, failed: fail, totalUsers: users.length, uniqueTokens: uniqueTokens.size });
 });
 
 // ===== ROUTE ADMIN: LISTA UTENTI E STATO TOKEN FCM =====
@@ -935,10 +945,19 @@ async function notificationRoutine() {
   // Recupera tutti gli utenti e i loro token push (da DB)
   const db = await connectMongo();
   const users = await db.collection('users').find({ fcmToken: { $exists: true } }).toArray();
+  
+  // Deduplicazione: raggruppa per token FCM unico per evitare duplicati
+  const uniqueTokens = new Map();
+  for (const user of users) {
+    if (user.fcmToken && !uniqueTokens.has(user.fcmToken)) {
+      uniqueTokens.set(user.fcmToken, user);
+    }
+  }
+  
   // Notifiche formazione
   for (const n of formationNotifications) {
     if (Math.abs(n.date - now) < 60 * 1000) {
-      for (const user of users) {
+      for (const [token, user] of uniqueTokens) {
         let title = '', body = '';
         if (n.type === 'reminder_formazione') {
           title = 'Schiera la tua squadra!';
@@ -954,7 +973,7 @@ async function notificationRoutine() {
           body = 'Scopri i tuoi punti e la posizione in classifica.';
         }
         if (title && body) {
-          await sendPushNotification(user.fcmToken, title, body, { type: n.type });
+          await sendPushNotification(token, title, body, { type: n.type });
         }
       }
     }
@@ -962,7 +981,7 @@ async function notificationRoutine() {
   // Notifiche mercato
   for (const n of mercatoNotifications) {
     if (Math.abs(n.date - now) < 60 * 1000) {
-      for (const user of users) {
+      for (const [token, user] of uniqueTokens) {
         let title = '', body = '';
         if (n.type === 'mercato_3gg_apertura') {
           title = 'Il mercato apre tra 3 giorni!';
@@ -975,7 +994,7 @@ async function notificationRoutine() {
           body = `Chiusura tra 10 minuti: ${n.window.end}`;
         }
         if (title && body) {
-          await sendPushNotification(user.fcmToken, title, body, { type: n.type });
+          await sendPushNotification(token, title, body, { type: n.type });
         }
       }
     }
