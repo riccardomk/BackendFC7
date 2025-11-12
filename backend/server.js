@@ -26,9 +26,24 @@ const SERVICE_ACCOUNT = {
   "token_uri": "https://oauth2.googleapis.com/token"
 };
 
+// Import dinamico di jsonwebtoken
+let jwt;
+
 // Funzione per generare token OAuth2 per Firebase HTTP v1 API
 async function getAccessToken() {
-  const jwt = require('jsonwebtoken');
+  // Import dinamico di jsonwebtoken solo quando necessario
+  if (!jwt) {
+    try {
+      jwt = (await import('jsonwebtoken')).default;
+    } catch (e) {
+      console.error('❌ Errore import jsonwebtoken:', e.message);
+      throw new Error('jsonwebtoken non disponibile');
+    }
+  }
+  
+  console.log('🔑 Generazione JWT per OAuth2...');
+  console.log('📧 Client Email:', SERVICE_ACCOUNT.client_email);
+  console.log('🔐 Private Key disponibile:', !!SERVICE_ACCOUNT.private_key);
   
   const now = Math.floor(Date.now() / 1000);
   const payload = {
@@ -39,7 +54,10 @@ async function getAccessToken() {
     exp: now + 3600
   };
   
+  console.log('📋 JWT Payload:', JSON.stringify(payload, null, 2));
+  
   const token = jwt.sign(payload, SERVICE_ACCOUNT.private_key, { algorithm: 'RS256' });
+  console.log('✅ JWT generato:', token.substring(0, 50) + '...');
   
   const response = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
@@ -51,6 +69,15 @@ async function getAccessToken() {
   });
   
   const data = await response.json();
+  console.log('📥 Risposta OAuth2:', JSON.stringify(data, null, 2));
+  
+  if (data.access_token) {
+    console.log('✅ Access Token ottenuto:', data.access_token.substring(0, 20) + '...');
+  } else {
+    console.error('❌ Errore OAuth2:', data);
+    throw new Error(`OAuth2 Error: ${data.error || 'Token non ricevuto'}`);
+  }
+  
   return data.access_token;
 }
 
