@@ -102,12 +102,14 @@ async function sendPushNotification(token, title, body, data = {}) {
           body: body
         },
         data: {
-          ...data
+          ...data,
+          click_action: 'OPEN_APP'
         },
         android: {
           priority: 'high',
           notification: {
-            sound: 'default'
+            sound: 'default',
+            click_action: 'OPEN_APP'
           }
         }
       }
