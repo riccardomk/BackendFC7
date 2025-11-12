@@ -510,6 +510,8 @@ app.post('/register', async (req, res) => {
 app.get('/ranking/global', async (req, res) => {
   try {
     const ranking = await loadRankingData();
+    const marketData = await loadMarketData(); // Carica i dati del mercato per i crediti
+    
     // Prendi tutti gli utenti registrati
     const db = await connectMongo();
     const users = await db.collection('users').find({}).toArray();
@@ -519,7 +521,10 @@ app.get('/ranking/global', async (req, res) => {
     ]));
     const arr = allUsernames.map(username => {
       const stats = ranking.global[username] || { punti: 0, golFatti: 0, golSubiti: 0, diffReti: 0 };
-      return { username, ...stats };
+      const userMarket = marketData.users[username];
+      const credits = userMarket ? userMarket.credits || 0 : 0; // Crediti reali dal mercato
+      
+      return { username, ...stats, credits };
     });
     arr.sort((a, b) => {
       if (b.punti !== a.punti) return b.punti - a.punti;
@@ -535,8 +540,15 @@ app.get('/ranking/weekly/:week', async (req, res) => {
   try {
     const week = req.params.week;
     const ranking = await loadRankingData();
+    const marketData = await loadMarketData(); // Carica i dati del mercato per i crediti
+    
     const weekData = ranking.weekly[week] || {};
-    const arr = Object.entries(weekData).map(([username, stats]) => ({ username, ...stats }));
+    const arr = Object.entries(weekData).map(([username, stats]) => {
+      const userMarket = marketData.users[username];
+      const credits = userMarket ? userMarket.credits || 0 : 0; // Crediti reali dal mercato
+      
+      return { username, ...stats, credits };
+    });
     arr.sort((a, b) => {
       if (b.punti !== a.punti) return b.punti - a.punti;
       if (b.diffReti !== a.diffReti) return b.diffReti - a.diffReti;
