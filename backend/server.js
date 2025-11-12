@@ -12,73 +12,62 @@ import bcrypt from 'bcryptjs';
 // ===== IMPORT FCM (Firebase Cloud Messaging) =====
 // import fetch from 'node-fetch'; // rimosso, gestito sotto
 
-// Configurazione FCM - USA ENTRAMBE LE CHIAVI
-const FCM_SERVER_KEY = process.env.FCM_SERVER_KEY;
-const WEB_API_KEY = process.env.WEB_API_KEY || 'AIzaSyAoxpvWt3LQBNFopADnyD_5eYF9yHug6hY';
+// Configurazione FCM - USA SERVICE ACCOUNT per HTTP v1 API
+const FCM_SERVER_KEY = process.env.FCM_SERVER_KEY; // Manteniamo per compatibilità
+const FCM_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'fantafc-12c98';
 
-// Funzione IBRIDA per inviare notifica push - tenta Legacy poi passa a v1
+// Service Account configurato dalle variabili d'ambiente
+const SERVICE_ACCOUNT = {
+  "type": "service_account",
+  "project_id": FCM_PROJECT_ID,
+  "private_key": process.env.FIREBASE_PRIVATE_KEY,
+  "client_email": process.env.FIREBASE_CLIENT_EMAIL,
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token"
+};
+
+// Funzione per generare token OAuth2 per Firebase HTTP v1 API
+async function getAccessToken() {
+  const jwt = require('jsonwebtoken');
+  
+  const now = Math.floor(Date.now() / 1000);
+  const payload = {
+    iss: SERVICE_ACCOUNT.client_email,
+    scope: 'https://www.googleapis.com/auth/firebase.messaging',
+    aud: 'https://oauth2.googleapis.com/token',
+    iat: now,
+    exp: now + 3600
+  };
+  
+  const token = jwt.sign(payload, SERVICE_ACCOUNT.private_key, { algorithm: 'RS256' });
+  
+  const response = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      assertion: token
+    })
+  });
+  
+  const data = await response.json();
+  return data.access_token;
+}
+
+// Funzione per FCM HTTP v1 API con Service Account
 async function sendPushNotification(token, title, body, data = {}) {
-  if (!FCM_SERVER_KEY) {
-    throw new Error('FCM_SERVER_KEY non configurato');
-  }
+  console.log('🔄 Invio notifica FCM HTTP v1...');
+  console.log('📱 Token destinatario:', token.substring(0, 30) + '...');
+  console.log('🔑 Service Account Email:', SERVICE_ACCOUNT.client_email);
+  console.log('🏷️ Project ID:', FCM_PROJECT_ID);
   
-  // TENTATIVO 1: API LEGACY con logging dettagliato
   try {
-    console.log('🔄 Tentativo FCM LEGACY...');
-    console.log('📧 Server Key:', FCM_SERVER_KEY ? FCM_SERVER_KEY.substring(0, 10) + '...' : 'MANCANTE');
-    console.log('📱 Token destinatario:', token.substring(0, 30) + '...');
+    // Genera Access Token OAuth2 con JWT
+    const accessToken = await getAccessToken();
+    console.log('✅ Access Token generato:', accessToken ? accessToken.substring(0, 20) + '...' : 'NULL');
     
-    const legacyMessage = {
-      to: token,
-      notification: {
-        title,
-        body,
-        sound: 'default'
-      },
-      data: {
-        ...data,
-        click_action: 'FLUTTER_NOTIFICATION_CLICK'
-      },
-      priority: 'high'
-    };
-    
-    console.log('📤 Messaggio FCM Legacy:', JSON.stringify(legacyMessage, null, 2));
-    
-    const legacyRes = await fetch('https://fcm.googleapis.com/fcm/send', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `key=${FCM_SERVER_KEY}`
-      },
-      body: JSON.stringify(legacyMessage)
-    });
-    
-    const legacyResult = await legacyRes.json();
-    
-    console.log('📥 Risposta FCM Legacy Status:', legacyRes.status);
-    console.log('📥 Risposta FCM Legacy Result:', JSON.stringify(legacyResult, null, 2));
-    
-    if (legacyRes.ok && legacyResult.success >= 1) {
-      console.log('✅ Notifica FCM LEGACY inviata con successo!');
-      return legacyResult;
-    } else {
-      console.log('⚠️ FCM Legacy fallita, dettagli completi:', {
-        status: legacyRes.status,
-        ok: legacyRes.ok,
-        result: legacyResult
-      });
-    }
-  } catch (legacyError) {
-    console.log('⚠️ FCM Legacy error completo:', legacyError);
-  }
-  
-  // TENTATIVO 2: API v1 con Google API Key (fallback)  
-  try {
-    console.log('🔄 Tentativo FCM v1 con Google API Key...');
-    
-    const googleApiKey = 'AIzaSyAoxpvWt3LQBNFopADnyD_5eYF9yHug6hY'; // Da google-services.json
-    
-    const v1Message = {
+    // Messaggio FCM HTTP v1 format
+    const message = {
       message: {
         token: token,
         notification: {
@@ -90,6 +79,7 @@ async function sendPushNotification(token, title, body, data = {}) {
           click_action: 'FLUTTER_NOTIFICATION_CLICK'
         },
         android: {
+          priority: 'high',
           notification: {
             sound: 'default',
             click_action: 'FLUTTER_NOTIFICATION_CLICK'
@@ -98,30 +88,40 @@ async function sendPushNotification(token, title, body, data = {}) {
       }
     };
     
-    const v1Res = await fetch(`https://fcm.googleapis.com/v1/projects/fantafc-12c98/messages:send?key=${googleApiKey}`, {
+    console.log('📤 Payload FCM v1:', JSON.stringify(message, null, 2));
+    
+    // Invia tramite HTTP v1 API
+    const response = await fetch(`https://fcm.googleapis.com/v1/projects/${FCM_PROJECT_ID}/messages:send`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`
       },
-      body: JSON.stringify(v1Message)
+      body: JSON.stringify(message)
     });
     
-    const v1Result = await v1Res.json();
+    const responseText = await response.text();
+    console.log('📥 Risposta FCM v1 Status:', response.status);
+    console.log('📥 Risposta FCM v1 Raw:', responseText);
     
-    if (v1Res.ok) {
-      console.log('✅ Notifica FCM v1 con Google API Key inviata:', v1Result);
-      return v1Result;
-    } else {
-      console.error('❌ Errore FCM v1 Google API Key:', {
-        status: v1Res.status,
-        statusText: v1Res.statusText,
-        result: v1Result
-      });
-      throw new Error(`FCM v1 Google API Error: ${v1Result.error?.message || 'Unknown error'}`);
+    let result;
+    try {
+      result = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error('❌ Errore parsing risposta:', parseError);
+      throw new Error(`Risposta FCM non valida: ${responseText}`);
     }
-  } catch (v1Error) {
-    console.error('❌ Errore FCM v1 Google API Key:', v1Error.message);
-    throw new Error(`Entrambe le API FCM fallite: ${v1Error.message}`);
+    
+    if (response.ok) {
+      console.log('✅ Notifica FCM v1 inviata con successo!');
+      return { success: 1, results: [result] }; // Formato compatibile
+    } else {
+      console.error('❌ Errore FCM v1:', result);
+      throw new Error(`FCM v1 Error: ${result.error?.message || 'Unknown error'}`);
+    }
+  } catch (error) {
+    console.error('❌ Errore completo FCM v1:', error.message);
+    throw error;
   }
 }
 
