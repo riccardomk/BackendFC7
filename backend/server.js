@@ -8,9 +8,11 @@ import { MongoClient } from 'mongodb';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
+import { createRequire } from 'module';
 
 // ===== IMPORT FCM (Firebase Cloud Messaging) =====
-import jwt from 'jsonwebtoken';
+const require = createRequire(import.meta.url);
+const jwt = require('jsonwebtoken');
 import fetch from 'node-fetch';
 
 // Configurazione FCM - USA SERVICE ACCOUNT per HTTP v1 API  
@@ -29,7 +31,6 @@ const SERVICE_ACCOUNT = {
 
 // Funzione per generare token OAuth2 per Firebase HTTP v1 API
 async function getAccessToken() {
-  console.log('🔑 Generazione JWT per OAuth2...');
   console.log('📧 Client Email:', SERVICE_ACCOUNT.client_email);
   console.log('🔐 Private Key disponibile:', !!SERVICE_ACCOUNT.private_key);
   
@@ -146,7 +147,16 @@ async function sendPushNotification(token, title, body, data = {}) {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// fetch è già importato sopra con import statico
+// Import dinamico di fetch SOLO dopo che path è definito
+let fetch;
+try {
+  fetch = (await import('node-fetch')).default;
+} catch (e) {
+  console.error("node-fetch non trovato, provo a installarlo...");
+  const { execSync } = await import('child_process');
+  execSync('npm install node-fetch@3', { stdio: 'inherit' });
+  fetch = (await import('node-fetch')).default;
+}
 
 const CALENDAR_FILES = {
   'Serie A': path.join(__dirname, 'calendar-seriea.json'),
