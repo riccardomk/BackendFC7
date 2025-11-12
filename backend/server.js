@@ -845,6 +845,249 @@ app.get('/formation/:userId', (req, res) => {
   res.json(formationData[userId]);
 });
 
+// ===== SISTEMA AUTOMAZIONE RISULTATI REALI =====
+// Mappa squadre per normalizzare nomi tra API e app
+const TEAM_MAPPING = {
+  // Serie A
+  'AC Milan': 'AC Milan',
+  'Inter Milan': 'Inter',
+  'Juventus FC': 'Juventus',
+  'AS Roma': 'AS Roma', 
+  'SSC Napoli': 'Napoli',
+  'Atalanta BC': 'Atalanta',
+  'ACF Fiorentina': 'Fiorentina',
+  'SS Lazio': 'Lazio',
+  'Torino FC': 'Torino',
+  'Udinese Calcio': 'Udinese',
+  // Premier League
+  'Manchester United FC': 'Manchester United',
+  'Manchester City FC': 'Manchester City', 
+  'Liverpool FC': 'Liverpool',
+  'Arsenal FC': 'Arsenal',
+  'Chelsea FC': 'Chelsea',
+  'Tottenham Hotspur FC': 'Tottenham',
+  // LaLiga
+  'Real Madrid CF': 'Real Madrid',
+  'FC Barcelona': 'Barcelona',
+  'Atlético de Madrid': 'Atletico Madrid',
+  'Sevilla FC': 'Sevilla',
+  'Valencia CF': 'Valencia',
+  // Bundesliga 
+  'FC Bayern München': 'Bayern Munich',
+  'Borussia Dortmund': 'Borussia Dortmund',
+  'RB Leipzig': 'RB Leipzig',
+  'Bayer 04 Leverkusen': 'Bayer Leverkusen',
+  // Ligue 1
+  'Paris Saint-Germain FC': 'Paris Saint-Germain',
+  'Olympique de Marseille': 'Marseille',
+  'Olympique Lyonnais': 'Lyon',
+  'AS Monaco FC': 'Monaco'
+};
+
+// Funzione per normalizzare nomi squadre
+function normalizeTeamName(apiName) {
+  return TEAM_MAPPING[apiName] || apiName;
+}
+
+// Funzione per recuperare risultati di una giornata specifica
+async function fetchMatchResults(league, matchday) {
+  const code = FOOTBALL_DATA_CODES[league];
+  if (!code) return {};
+  
+  try {
+    console.log(`🔄 Recupero risultati ${league} - Giornata ${matchday}`);
+    const res = await fetch(`${FOOTBALL_DATA_API}/${code}/matches?matchday=${matchday}&season=2025`, {
+      headers: { 'X-Auth-Token': FOOTBALL_DATA_TOKEN }
+    });
+    
+    if (!res.ok) {
+      console.error(`❌ Errore API ${league}:`, res.status);
+      return {};
+    }
+    
+    const data = await res.json();
+    const results = {};
+    
+    for (const match of data.matches || []) {
+      if (match.status !== 'FINISHED') continue;
+      
+      const homeTeam = normalizeTeamName(match.homeTeam.name);
+      const awayTeam = normalizeTeamName(match.awayTeam.name);
+      const homeScore = match.score.fullTime.home;
+      const awayScore = match.score.fullTime.away;
+      
+      // Determina esito per squadra di casa
+      let homeResult, awayResult;
+      if (homeScore > awayScore) {
+        homeResult = { esito: 'W', gf: homeScore, gs: awayScore };
+        awayResult = { esito: 'L', gf: awayScore, gs: homeScore };
+      } else if (homeScore < awayScore) {
+        homeResult = { esito: 'L', gf: homeScore, gs: awayScore };
+        awayResult = { esito: 'W', gf: awayScore, gs: homeScore };
+      } else {
+        homeResult = { esito: 'D', gf: homeScore, gs: awayScore };
+        awayResult = { esito: 'D', gf: awayScore, gs: homeScore };
+      }
+      
+      results[homeTeam] = homeResult;
+      results[awayTeam] = awayResult;
+    }
+    
+    console.log(`✅ ${league} - Giornata ${matchday}: ${Object.keys(results).length} squadre`);
+    return results;
+  } catch (e) {
+    console.error(`❌ Errore fetch risultati ${league}:`, e.message);
+    return {};
+  }
+}
+
+// Funzione principale per aggiornare automaticamente il ranking
+async function updateRankingWithRealResults(week) {
+  console.log(`🚀 INIZIO aggiornamento automatico ranking - Settimana ${week}`);
+  
+  try {
+    // 1. Recupera tutti i risultati della settimana da tutte le leghe
+    const allResults = {};
+    for (const league of Object.keys(FOOTBALL_DATA_CODES)) {
+      const leagueResults = await fetchMatchResults(league, week);
+      Object.assign(allResults, leagueResults);
+    }
+    
+    if (Object.keys(allResults).length === 0) {
+      console.log(`⚠️ Nessun risultato trovato per la settimana ${week}`);
+      return { updated: 0, error: 'Nessun risultato disponibile' };
+    }
+    
+    console.log(`📊 Risultati recuperati: ${Object.keys(allResults).length} squadre`);
+    
+    // 2. Carica tutte le formazioni confermate
+    const formationData = loadFormationData();
+    const ranking = await loadRankingData();
+    
+    let updatedUsers = 0;
+    
+    // 3. Aggiorna il ranking per ogni utente che ha inviato la formazione
+    for (const [userId, formation] of Object.entries(formationData)) {
+      if (!formation.confirmed || !formation.starters) continue;
+      
+      console.log(`🔄 Calcolo punti per ${userId}...`);
+      
+      // Calcola punti per le squadre schierate
+      const giornata = calcolaPunteggioGiornata(formation.starters, allResults);
+      
+      // Aggiorna ranking settimanale
+      if (!ranking.weekly[week]) ranking.weekly[week] = {};
+      ranking.weekly[week][userId] = giornata;
+      
+      // Aggiorna ranking globale
+      if (!ranking.global[userId]) {
+        ranking.global[userId] = { punti: 0, golFatti: 0, golSubiti: 0, diffReti: 0 };
+      }
+      
+      ranking.global[userId].punti += giornata.punti;
+      ranking.global[userId].golFatti += giornata.golFatti;
+      ranking.global[userId].golSubiti += giornata.golSubiti;
+      ranking.global[userId].diffReti = ranking.global[userId].golFatti - ranking.global[userId].golSubiti;
+      
+      updatedUsers++;
+      console.log(`✅ ${userId}: ${giornata.punti} punti (${giornata.golFatti}-${giornata.golSubiti})`);
+    }
+    
+    // 4. Salva il ranking aggiornato
+    await saveRankingData(ranking);
+    
+    console.log(`🎉 COMPLETATO aggiornamento automatico: ${updatedUsers} utenti aggiornati`);
+    
+    return { 
+      updated: updatedUsers, 
+      week: week,
+      totalResults: Object.keys(allResults).length,
+      results: allResults 
+    };
+    
+  } catch (error) {
+    console.error(`❌ ERRORE aggiornamento automatico:`, error.message);
+    throw error;
+  }
+}
+
+// ===== ROUTE ADMIN: AGGIORNAMENTO AUTOMATICO RANKING =====
+app.post('/admin/update-ranking-auto/:week', async (req, res) => {
+  try {
+    const week = parseInt(req.params.week);
+    if (!week || week < 1 || week > 38) {
+      return res.status(400).json({ error: 'Settimana non valida (1-38)' });
+    }
+    
+    const result = await updateRankingWithRealResults(week);
+    res.json({ 
+      ok: true, 
+      message: `Ranking aggiornato automaticamente per la settimana ${week}`,
+      ...result 
+    });
+  } catch (e) {
+    console.error('Errore aggiornamento automatico:', e.message);
+    res.status(500).json({ 
+      error: 'Errore aggiornamento automatico', 
+      details: e.message 
+    });
+  }
+});
+
+// ===== ROUTE ADMIN: VERIFICA RISULTATI DISPONIBILI =====
+app.get('/admin/check-results/:league/:week', async (req, res) => {
+  try {
+    const { league, week } = req.params;
+    const results = await fetchMatchResults(league, parseInt(week));
+    
+    res.json({
+      league,
+      week: parseInt(week),
+      available: Object.keys(results).length > 0,
+      totalMatches: Object.keys(results).length / 2, // Diviso 2 perché ogni partita ha 2 squadre
+      results
+    });
+  } catch (e) {
+    res.status(500).json({ error: 'Errore verifica risultati', details: e.message });
+  }
+});
+
+// ===== ROUTE ADMIN: AGGIORNAMENTO AUTOMATICO SETTIMANALE =====
+app.post('/admin/auto-update-current-week', async (req, res) => {
+  try {
+    // Trova la settimana comune corrente
+    const next = getNextCommonWeekAndFirstMatch();
+    if (!next) {
+      return res.status(400).json({ error: 'Nessuna settimana comune disponibile' });
+    }
+    
+    // Verifica se è passato abbastanza tempo dalla prima partita (es. 2 ore)
+    const now = new Date();
+    const timeSinceFirstMatch = now - next.firstMatch;
+    const twoHours = 2 * 60 * 60 * 1000;
+    
+    if (timeSinceFirstMatch < twoHours) {
+      return res.status(400).json({ 
+        error: 'Troppo presto per aggiornare i risultati',
+        firstMatch: next.firstMatch,
+        waitUntil: new Date(next.firstMatch.getTime() + twoHours)
+      });
+    }
+    
+    const result = await updateRankingWithRealResults(next.week);
+    res.json({ 
+      ok: true, 
+      message: `Ranking aggiornato automaticamente per la settimana corrente ${next.week}`,
+      ...result 
+    });
+  } catch (e) {
+    res.status(500).json({ 
+      error: 'Errore aggiornamento automatico settimana corrente', 
+      details: e.message 
+    });
+  }
+});
+
 // ===== FUNZIONE RESET FINE STAGIONE =====
 app.post('/admin/reset-stagione', async (req, res) => {
   try {
@@ -1001,11 +1244,65 @@ async function notificationRoutine() {
   }
 }
 
-// Routine ogni minuto
+// ===== AUTOMAZIONE RANKING SETTIMANALE =====
+async function autoUpdateRankingRoutine() {
+  try {
+    const next = getNextCommonWeekAndFirstMatch();
+    if (!next) return;
+    
+    const now = new Date();
+    const timeSinceFirstMatch = now - next.firstMatch;
+    const twoHours = 2 * 60 * 60 * 1000;
+    
+    // Aggiorna automaticamente 2 ore dopo la prima partita della settimana
+    if (timeSinceFirstMatch >= twoHours && timeSinceFirstMatch <= twoHours + 60000) { // Finestra di 1 minuto
+      console.log('🚀 AVVIO aggiornamento automatico ranking settimanale...');
+      try {
+        const result = await updateRankingWithRealResults(next.week);
+        console.log(`✅ Ranking aggiornato automaticamente: ${result.updated} utenti`);
+        
+        // Invia notifica a tutti gli utenti sui nuovi risultati
+        const db = await connectMongo();
+        const users = await db.collection('users').find({ fcmToken: { $exists: true } }).toArray();
+        
+        const uniqueTokens = new Map();
+        for (const user of users) {
+          if (user.fcmToken && !uniqueTokens.has(user.fcmToken)) {
+            uniqueTokens.set(user.fcmToken, user);
+          }
+        }
+        
+        for (const [token, user] of uniqueTokens) {
+          try {
+            await sendPushNotification(
+              token,
+              '📊 Classifica Aggiornata!',
+              `I risultati della settimana ${next.week} sono disponibili. Controlla la tua posizione!`,
+              { type: 'ranking_updated', week: next.week.toString() }
+            );
+          } catch (e) {
+            console.error(`❌ Errore notifica ranking a ${user.name}:`, e.message);
+          }
+        }
+        
+      } catch (error) {
+        console.error('❌ Errore aggiornamento automatico ranking:', error.message);
+      }
+    }
+  } catch (error) {
+    console.error('❌ Errore routine automazione ranking:', error.message);
+  }
+}
+
+// Routine notifiche ogni minuto
 setInterval(notificationRoutine, 60 * 1000);
+
+// Routine aggiornamento ranking automatico ogni 5 minuti
+setInterval(autoUpdateRankingRoutine, 5 * 60 * 1000);
 
 const PORT = process.env.PORT || 1000;
 app.listen(PORT, () => {
   console.log(`Server avviato sulla porta ${PORT}`);
+  console.log('🤖 Sistema automazione ranking attivato');
 });
 
