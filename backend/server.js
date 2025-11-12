@@ -102,14 +102,12 @@ async function sendPushNotification(token, title, body, data = {}) {
           body: body
         },
         data: {
-          ...data,
-          click_action: 'FLUTTER_NOTIFICATION_CLICK'
+          ...data
         },
         android: {
           priority: 'high',
           notification: {
-            sound: 'default',
-            click_action: 'FLUTTER_NOTIFICATION_CLICK'
+            sound: 'default'
           }
         }
       }
