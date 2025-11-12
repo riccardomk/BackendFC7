@@ -1064,6 +1064,75 @@ app.get('/admin/check-results/:league/:week', async (req, res) => {
   }
 });
 
+// ===== ROUTE ADMIN: PULIZIA DATI UTENTE =====
+app.post('/admin/clean-user-data/:username', async (req, res) => {
+  try {
+    const username = req.params.username;
+    if (!username) {
+      return res.status(400).json({ error: 'Username mancante' });
+    }
+    
+    console.log(`🧹 PULIZIA DATI per utente: ${username}`);
+    
+    // 1. Pulisci ranking globale e settimanale
+    const ranking = await loadRankingData();
+    
+    // Rimuovi da ranking globale
+    if (ranking.global[username]) {
+      delete ranking.global[username];
+      console.log(`✅ Rimosso ${username} da ranking globale`);
+    }
+    
+    // Rimuovi da tutti i ranking settimanali
+    let weeksCleaned = 0;
+    for (const week in ranking.weekly) {
+      if (ranking.weekly[week][username]) {
+        delete ranking.weekly[week][username];
+        weeksCleaned++;
+      }
+    }
+    console.log(`✅ Rimosso ${username} da ${weeksCleaned} ranking settimanali`);
+    
+    // Salva ranking pulito
+    await saveRankingData(ranking);
+    
+    // 2. Pulisci dati mercato
+    const marketData = await loadMarketData();
+    if (marketData.users[username]) {
+      delete marketData.users[username];
+      await saveMarketData(marketData);
+      console.log(`✅ Rimosso ${username} da dati mercato`);
+    }
+    
+    // 3. Pulisci formazioni
+    const formationData = loadFormationData();
+    if (formationData[username]) {
+      delete formationData[username];
+      saveFormationData(formationData);
+      console.log(`✅ Rimosso ${username} da formazioni`);
+    }
+    
+    console.log(`🎉 PULIZIA COMPLETATA per ${username}`);
+    
+    res.json({ 
+      ok: true, 
+      message: `Dati utente ${username} completamente puliti`,
+      cleaned: {
+        ranking: true,
+        weeksCleared: weeksCleaned,
+        market: !!marketData.users[username],
+        formations: !!formationData[username]
+      }
+    });
+  } catch (e) {
+    console.error('Errore pulizia dati utente:', e.message);
+    res.status(500).json({ 
+      error: 'Errore pulizia dati utente', 
+      details: e.message 
+    });
+  }
+});
+
 // ===== ROUTE ADMIN: AGGIORNAMENTO AUTOMATICO SETTIMANALE =====
 app.post('/admin/auto-update-current-week', async (req, res) => {
   try {
