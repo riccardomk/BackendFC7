@@ -809,10 +809,9 @@ app.post('/formation/:userId', async (req, res) => {
     }
     const now = new Date();
     const limite = new Date(next.firstMatch.getTime() - 30 * 60 * 1000); // 30 minuti prima
-    // TEMPORANEO: Controllo deadline disabilitato per TEST
-    // if (now > limite) {
-    //   return res.status(403).json({ error: 'Tempo scaduto: la formazione poteva essere inviata solo fino a 30 minuti prima della prima partita.' });
-    // }
+    if (now > limite) {
+      return res.status(403).json({ error: 'Tempo scaduto: la formazione poteva essere inviata solo fino a 30 minuti prima della prima partita.' });
+    }
     // Leggi mercato per validare club posseduti (online)
     const marketData = await loadMarketData();
     const userMarket = marketData.users[userId];
