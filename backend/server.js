@@ -756,35 +756,62 @@ app.get('/profile-pic/:username', async (req, res) => {
 });
 
 // ===== ROUTE FORMAZIONE: Salva la formazione confermata per utente =====
-import formationFs from 'fs';
-const FORMATION_FILE = path.join(__dirname, 'formation-data.json');
-
-function loadFormationData() {
-  if (!formationFs.existsSync(FORMATION_FILE)) return {};
-  return JSON.parse(formationFs.readFileSync(FORMATION_FILE, 'utf8'));
+// Funzioni formazione su MongoDB
+async function loadFormationData() {
+  const db = await connectMongo();
+  const formations = await db.collection('formations').find({}).toArray();
+  const result = {};
+  for (const f of formations) {
+    result[f.userId] = {
+      starters: f.starters,
+      confirmed: f.confirmed,
+      timestamp: f.timestamp,
+      week: f.week
+    };
+  }
+  return result;
 }
-function saveFormationData(data) {
-  formationFs.writeFileSync(FORMATION_FILE, JSON.stringify(data, null, 2));
+
+async function saveFormationData(userId, formationObj) {
+  const db = await connectMongo();
+  await db.collection('formations').updateOne(
+    { userId: userId },
+    { 
+      $set: { 
+        userId: userId,
+        starters: formationObj.starters,
+        confirmed: formationObj.confirmed,
+        timestamp: formationObj.timestamp,
+        week: formationObj.week
+      } 
+    },
+    { upsert: true }
+  );
+}
+
+async function getFormationByUser(userId) {
+  const db = await connectMongo();
+  return await db.collection('formations').findOne({ userId: userId });
 }
 
 // Salva la formazione solo se non già confermata per il turno
-app.post('/formation/:userId', (req, res) => {
-  const userId = req.params.userId;
-  const { starters, confirmed } = req.body;
-  if (!userId || !Array.isArray(starters) || starters.length !== 11) {
-    return res.status(400).json({ error: 'Dati formazione non validi (serve 11 titolari)' });
-  }
-  // --- LOGICA BLOCCO FORMAZIONE: SOLO SE TUTTI I CAMPIONATI HANNO UNA GIORNATA (SETTIMANA COMUNE) ---
-  const next = getNextCommonWeekAndFirstMatch();
-  if (!next) {
-    return res.status(403).json({ error: 'Non tutti i campionati hanno una giornata attiva questa settimana.' });
-  }
-  const now = new Date();
-  const limite = new Date(next.firstMatch.getTime() - 30 * 60 * 1000); // 30 minuti prima
-  if (now > limite) {
-    return res.status(403).json({ error: 'Tempo scaduto: la formazione poteva essere inviata solo fino a 30 minuti prima della prima partita.' });
-  }
-  (async () => {
+app.post('/formation/:userId', async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const { starters, confirmed } = req.body;
+    if (!userId || !Array.isArray(starters) || starters.length !== 11) {
+      return res.status(400).json({ error: 'Dati formazione non validi (serve 11 titolari)' });
+    }
+    // --- LOGICA BLOCCO FORMAZIONE: SOLO SE TUTTI I CAMPIONATI HANNO UNA GIORNATA (SETTIMANA COMUNE) ---
+    const next = getNextCommonWeekAndFirstMatch();
+    if (!next) {
+      return res.status(403).json({ error: 'Non tutti i campionati hanno una giornata attiva questa settimana.' });
+    }
+    const now = new Date();
+    const limite = new Date(next.firstMatch.getTime() - 30 * 60 * 1000); // 30 minuti prima
+    if (now > limite) {
+      return res.status(403).json({ error: 'Tempo scaduto: la formazione poteva essere inviata solo fino a 30 minuti prima della prima partita.' });
+    }
     // Leggi mercato per validare club posseduti (online)
     const marketData = await loadMarketData();
     const userMarket = marketData.users[userId];
@@ -798,17 +825,20 @@ app.post('/formation/:userId', (req, res) => {
     if (!valid) {
       return res.status(400).json({ error: 'Almeno un club non è stato acquistato dal mercato' });
     }
-    // Carica formazioni già inviate
-    const formationData = loadFormationData();
-    // Permetti sempre la sovrascrittura fino alla deadline
-    formationData[userId] = {
+    // Salva formazione su MongoDB
+    const formationObj = {
       starters,
       confirmed: true,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      week: next.week
     };
-    saveFormationData(formationData);
-    res.json({ ok: true, starters });
-  })();
+    await saveFormationData(userId, formationObj);
+    console.log(`✅ Formazione salvata su MongoDB per ${userId} - Settimana ${next.week}`);
+    res.json({ ok: true, starters, week: next.week });
+  } catch (error) {
+    console.error('Errore salvataggio formazione:', error);
+    res.status(500).json({ error: 'Errore interno del server' });
+  }
 });
 
 
@@ -849,13 +879,23 @@ app.get('/formation/diagnostics', (req, res) => {
 });
 
 // Route GET per recuperare la formazione confermata di un utente
-app.get('/formation/:userId', (req, res) => {
-  const userId = req.params.userId;
-  const formationData = loadFormationData();
-  if (!formationData[userId]) {
-    return res.status(404).json({ error: 'Nessuna formazione confermata trovata' });
+app.get('/formation/:userId', async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const formation = await getFormationByUser(userId);
+    if (!formation) {
+      return res.status(404).json({ error: 'Nessuna formazione confermata trovata' });
+    }
+    res.json({
+      starters: formation.starters,
+      confirmed: formation.confirmed,
+      timestamp: formation.timestamp,
+      week: formation.week
+    });
+  } catch (error) {
+    console.error('Errore recupero formazione:', error);
+    res.status(500).json({ error: 'Errore interno del server' });
   }
-  res.json(formationData[userId]);
 });
 
 // ===== SISTEMA AUTOMAZIONE RISULTATI REALI =====
@@ -973,15 +1013,17 @@ async function updateRankingWithRealResults(week) {
     
     console.log(`📊 Risultati recuperati: ${Object.keys(allResults).length} squadre`);
     
-    // 2. Carica tutte le formazioni confermate
-    const formationData = loadFormationData();
+    // 2. Carica tutte le formazioni confermate da MongoDB
+    const db = await connectMongo();
+    const formations = await db.collection('formations').find({ confirmed: true }).toArray();
     const ranking = await loadRankingData();
     
     let updatedUsers = 0;
     
     // 3. Aggiorna il ranking per ogni utente che ha inviato la formazione
-    for (const [userId, formation] of Object.entries(formationData)) {
+    for (const formation of formations) {
       if (!formation.confirmed || !formation.starters) continue;
+      const userId = formation.userId;
       
       console.log(`🔄 Calcolo punti per ${userId}...`);
       
