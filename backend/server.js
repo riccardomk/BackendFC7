@@ -317,10 +317,15 @@ async function connectMongo() {
 
 // ===== CONFIGURAZIONE NODEMAILER PER INVIO EMAIL =====
 const transporter = nodemailer.createTransport({
-  service: 'gmail', // Puoi usare altri provider: outlook, yahoo, etc.
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false, // true per 465, false per altre porte
   auth: {
-    user: process.env.EMAIL_USER || 'tuaemail@gmail.com', // Inserisci la tua email
-    pass: process.env.EMAIL_PASS || 'tuapasswordapp' // Password app Gmail o password normale
+    user: process.env.EMAIL_USER || 'tuaemail@gmail.com',
+    pass: process.env.EMAIL_PASS || 'tuapasswordapp'
+  },
+  tls: {
+    rejectUnauthorized: false
   }
 });
 
