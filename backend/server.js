@@ -1,4 +1,7 @@
 // ===== IMPORTS ALL'INIZIO =====
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -9,6 +12,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
 import { createRequire } from 'module';
+import nodemailer from 'nodemailer';
+import crypto from 'crypto';
 
 // ===== IMPORT FCM (Firebase Cloud Messaging) =====
 const require = createRequire(import.meta.url);
@@ -309,6 +314,50 @@ async function connectMongo() {
   }
   return mongoDb;
 }
+
+// ===== CONFIGURAZIONE NODEMAILER PER INVIO EMAIL =====
+const transporter = nodemailer.createTransport({
+  service: 'gmail', // Puoi usare altri provider: outlook, yahoo, etc.
+  auth: {
+    user: process.env.EMAIL_USER || 'tuaemail@gmail.com', // Inserisci la tua email
+    pass: process.env.EMAIL_PASS || 'tuapasswordapp' // Password app Gmail o password normale
+  }
+});
+
+// Funzione per inviare email di reset password
+async function sendResetEmail(email, resetToken, userName) {
+  const resetLink = `fantafc://reset-password?token=${resetToken}`;
+  
+  const mailOptions = {
+    from: process.env.EMAIL_USER || 'FantaFC App <noreply@fantafc.com>',
+    to: email,
+    subject: 'Reset Password - FantaFC',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #2575fc;">Reset Password FantaFC</h2>
+        <p>Ciao <strong>${userName}</strong>,</p>
+        <p>Hai richiesto di reimpostare la tua password. Clicca sul pulsante qui sotto per procedere:</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${resetLink}" style="background-color: #2575fc; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">Reimposta Password</a>
+        </div>
+        <p style="color: #666; font-size: 14px;">Questo link è valido per 30 minuti.</p>
+        <p style="color: #666; font-size: 14px;">Se non hai richiesto il reset della password, ignora questa email.</p>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+        <p style="color: #999; font-size: 12px;">FantaFC Team</p>
+      </div>
+    `
+  };
+  
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`[EMAIL INVIATA] Reset password inviato a ${email}`);
+    return true;
+  } catch (error) {
+    console.error('[ERRORE INVIO EMAIL]', error);
+    return false;
+  }
+}
+
 const USERS_FILE = path.join(__dirname, 'users-profile-pics.json');
 //const MARKET_FILE = path.join(__dirname, 'market-data.json');
 
@@ -537,7 +586,7 @@ app.post('/login', async (req, res) => {
   res.json({ user: userSafe });
 });
 
-// ===== RECUPERO PASSWORD =====
+// ===== RECUPERO PASSWORD CON TOKEN E EMAIL =====
 app.post('/forgot-password', async (req, res) => {
   try {
     const { name } = req.body;
@@ -554,32 +603,115 @@ app.post('/forgot-password', async (req, res) => {
       return res.status(400).json({ error: 'Nessuna email associata a questo profilo' });
     }
     
-    // Genera password temporanea (8 caratteri alfanumerici)
-    const tempPassword = Math.random().toString(36).slice(-8);
-    const hashedPassword = bcrypt.hashSync(tempPassword, 10);
+    // Genera token sicuro (32 caratteri esadecimali)
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenExpiry = Date.now() + 30 * 60 * 1000; // 30 minuti
     
-    // Aggiorna password nel database
+    // Salva token nel database
     const db = await connectMongo();
     await db.collection('users').updateOne(
       { name: user.name },
-      { $set: { password: hashedPassword } }
+      { 
+        $set: { 
+          resetToken: resetToken,
+          resetTokenExpiry: resetTokenExpiry
+        } 
+      }
     );
     
-    // Log per debug (in produzione inviare email vera)
-    console.log(`[RECUPERO PASSWORD] ${user.name} - Email: ${user.email} - Nuova password: ${tempPassword}`);
+    // Invia email con link di reset
+    const emailSent = await sendResetEmail(user.email, resetToken, user.name);
     
-    // TODO: Inviare email vera con servizio email (SendGrid, Mailgun, ecc.)
-    // Per ora simuliamo l'invio
+    if (!emailSent) {
+      return res.status(500).json({ error: 'Impossibile inviare l\'email. Riprova più tardi.' });
+    }
+    
+    console.log(`[RESET PASSWORD] Token generato per ${user.name} - Email: ${user.email}`);
     
     res.json({ 
       success: true, 
-      message: 'Password temporanea inviata via email',
-      // RIMUOVERE IN PRODUZIONE - solo per debug:
-      debug_password: tempPassword,
-      debug_email: user.email
+      message: 'Email di reset inviata! Controlla la tua casella email.',
+      email: user.email.replace(/(.{2}).*(@.*)/, '$1***$2') // Mostra parzialmente l'email
     });
   } catch (error) {
     console.error('[ERRORE RECUPERO PASSWORD]', error);
+    res.status(500).json({ error: 'Errore del server' });
+  }
+});
+
+// ===== VERIFICA TOKEN RESET PASSWORD =====
+app.post('/verify-reset-token', async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) {
+      return res.status(400).json({ error: 'Token mancante' });
+    }
+    
+    const db = await connectMongo();
+    const user = await db.collection('users').findOne({ resetToken: token });
+    
+    if (!user) {
+      return res.status(404).json({ error: 'Token non valido' });
+    }
+    
+    if (user.resetTokenExpiry < Date.now()) {
+      return res.status(400).json({ error: 'Token scaduto. Richiedi un nuovo reset.' });
+    }
+    
+    res.json({ 
+      success: true, 
+      userName: user.name 
+    });
+  } catch (error) {
+    console.error('[ERRORE VERIFICA TOKEN]', error);
+    res.status(500).json({ error: 'Errore del server' });
+  }
+});
+
+// ===== RESET PASSWORD CON NUOVO PASSWORD =====
+app.post('/reset-password', async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+    
+    if (!token || !newPassword) {
+      return res.status(400).json({ error: 'Token o password mancanti' });
+    }
+    
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'La password deve essere di almeno 6 caratteri' });
+    }
+    
+    const db = await connectMongo();
+    const user = await db.collection('users').findOne({ resetToken: token });
+    
+    if (!user) {
+      return res.status(404).json({ error: 'Token non valido' });
+    }
+    
+    if (user.resetTokenExpiry < Date.now()) {
+      return res.status(400).json({ error: 'Token scaduto. Richiedi un nuovo reset.' });
+    }
+    
+    // Cripta la nuova password
+    const hashedPassword = bcrypt.hashSync(newPassword, 10);
+    
+    // Aggiorna password e rimuovi token
+    await db.collection('users').updateOne(
+      { name: user.name },
+      { 
+        $set: { password: hashedPassword },
+        $unset: { resetToken: '', resetTokenExpiry: '' }
+      }
+    );
+    
+    console.log(`[PASSWORD REIMPOSTATA] Utente: ${user.name}`);
+    
+    res.json({ 
+      success: true, 
+      message: 'Password reimpostata con successo!' 
+    });
+  } catch (error) {
+    console.error('[ERRORE RESET PASSWORD]', error);
     res.status(500).json({ error: 'Errore del server' });
   }
 });
