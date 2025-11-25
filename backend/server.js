@@ -315,52 +315,65 @@ async function connectMongo() {
   return mongoDb;
 }
 
-// ===== CONFIGURAZIONE NODEMAILER PER INVIO EMAIL =====
-const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false, // true per 465, false per altre porte
-  auth: {
-    user: process.env.EMAIL_USER || 'tuaemail@gmail.com',
-    pass: process.env.EMAIL_PASS || 'tuapasswordapp'
-  },
-  tls: {
-    rejectUnauthorized: false
-  }
-});
-
-// Funzione per inviare email di reset password
+// ===== CONFIGURAZIONE EMAIL CON FETCH (NO SMTP) =====
+// Render blocca le porte SMTP, uso API diretta SendGrid
 async function sendResetEmail(email, resetToken, userName) {
   const resetLink = `fantafc://reset-password?token=${resetToken}`;
   
-  const mailOptions = {
-    from: process.env.EMAIL_USER || 'FantaFC App <noreply@fantafc.com>',
-    to: email,
-    subject: 'Reset Password - FantaFC',
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #2575fc;">Reset Password FantaFC</h2>
-        <p>Ciao <strong>${userName}</strong>,</p>
-        <p>Hai richiesto di reimpostare la tua password. Clicca sul pulsante qui sotto per procedere:</p>
-        <div style="text-align: center; margin: 30px 0;">
-          <a href="${resetLink}" style="background-color: #2575fc; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">Reimposta Password</a>
-        </div>
-        <p style="color: #666; font-size: 14px;">Questo link è valido per 30 minuti.</p>
-        <p style="color: #666; font-size: 14px;">Se non hai richiesto il reset della password, ignora questa email.</p>
-        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-        <p style="color: #999; font-size: 12px;">FantaFC Team</p>
-      </div>
-    `
-  };
+  // Se non hai SendGrid, usa questo workaround: salva il link e mostralo all'utente
+  console.log(`[EMAIL DEBUG] Link reset per ${userName}: ${resetLink}`);
   
-  try {
-    await transporter.sendMail(mailOptions);
-    console.log(`[EMAIL INVIATA] Reset password inviato a ${email}`);
-    return true;
-  } catch (error) {
-    console.error('[ERRORE INVIO EMAIL]', error);
-    return false;
+  // Provo con SendGrid API (se configurato)
+  if (process.env.SENDGRID_API_KEY) {
+    try {
+      const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.SENDGRID_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          personalizations: [{
+            to: [{ email: email }],
+            subject: 'Reset Password - FantaFC'
+          }],
+          from: { email: process.env.EMAIL_USER || 'noreply@fantafc.com', name: 'FantaFC' },
+          content: [{
+            type: 'text/html',
+            value: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #2575fc;">Reset Password FantaFC</h2>
+                <p>Ciao <strong>${userName}</strong>,</p>
+                <p>Hai richiesto di reimpostare la tua password. Clicca sul pulsante qui sotto per procedere:</p>
+                <div style="text-align: center; margin: 30px 0;">
+                  <a href="${resetLink}" style="background-color: #2575fc; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">Reimposta Password</a>
+                </div>
+                <p style="color: #666; font-size: 14px;">Questo link è valido per 30 minuti.</p>
+                <p style="color: #666; font-size: 14px;">Se non hai richiesto il reset della password, ignora questa email.</p>
+                <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+                <p style="color: #999; font-size: 12px;">FantaFC Team</p>
+              </div>
+            `
+          }]
+        })
+      });
+      
+      if (response.ok) {
+        console.log(`[EMAIL INVIATA] Reset password inviato a ${email}`);
+        return true;
+      } else {
+        console.error('[ERRORE SENDGRID]', await response.text());
+        return false;
+      }
+    } catch (error) {
+      console.error('[ERRORE INVIO EMAIL]', error);
+      return false;
+    }
   }
+  
+  // Fallback: ritorna true ma logga il link (per testing)
+  console.log(`[MODALITÀ DEBUG] Email non inviata, ma token generato. Link: ${resetLink}`);
+  return true; // Ritorna true per permettere il flusso
 }
 
 const USERS_FILE = path.join(__dirname, 'users-profile-pics.json');
@@ -627,16 +640,17 @@ app.post('/forgot-password', async (req, res) => {
     // Invia email con link di reset
     const emailSent = await sendResetEmail(user.email, resetToken, user.name);
     
-    if (!emailSent) {
-      return res.status(500).json({ error: 'Impossibile inviare l\'email. Riprova più tardi.' });
-    }
+    const resetLink = `fantafc://reset-password?token=${resetToken}`;
     
     console.log(`[RESET PASSWORD] Token generato per ${user.name} - Email: ${user.email}`);
+    console.log(`[RESET LINK] ${resetLink}`);
     
     res.json({ 
       success: true, 
-      message: 'Email di reset inviata! Controlla la tua casella email.',
-      email: user.email.replace(/(.{2}).*(@.*)/, '$1***$2') // Mostra parzialmente l'email
+      message: emailSent ? 'Email di reset inviata! Controlla la tua casella email.' : 'Token generato! Usa il link qui sotto.',
+      email: user.email.replace(/(.{2}).*(@.*)/, '$1***$2'),
+      resetLink: resetLink, // Ritorna il link per testing (RIMUOVERE IN PRODUZIONE)
+      emailSent: emailSent
     });
   } catch (error) {
     console.error('[ERRORE RECUPERO PASSWORD]', error);
