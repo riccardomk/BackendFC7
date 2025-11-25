@@ -172,6 +172,16 @@ const FOOTBALL_DATA_CODES = {
   'Bundesliga': 'BL1',
   'Ligue 1': 'FL1',
 };
+
+// Mappa delle stagioni per ogni lega (Bundesliga usa 2024, le altre 2025)
+const LEAGUE_SEASONS = {
+  'Serie A': 2025,
+  'Premier League': 2025,
+  'LaLiga': 2025,
+  'Bundesliga': 2025,
+  'Ligue 1': 2025
+};
+
 const FOOTBALL_DATA_TOKEN = process.env.FOOTBALL_DATA_TOKEN || '81ed2d1e396e4164b91e079b249038df';
 async function fetchCalendar(league, file) {
   const code = FOOTBALL_DATA_CODES[league];
@@ -1202,9 +1212,11 @@ async function fetchMatchResults(league, matchday) {
   const code = FOOTBALL_DATA_CODES[league];
   if (!code) return {};
   
+  const season = LEAGUE_SEASONS[league] || 2025;
+  
   try {
-    console.log(`🔄 Recupero risultati ${league} - Giornata ${matchday}`);
-    const res = await fetch(`${FOOTBALL_DATA_API}/${code}/matches?matchday=${matchday}&season=2025`, {
+    console.log(`🔄 Recupero risultati ${league} - Giornata ${matchday} (Stagione ${season})`);
+    const res = await fetch(`${FOOTBALL_DATA_API}/${code}/matches?matchday=${matchday}&season=${season}`, {
       headers: { 'X-Auth-Token': FOOTBALL_DATA_TOKEN }
     });
     
