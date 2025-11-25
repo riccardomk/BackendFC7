@@ -1268,9 +1268,15 @@ async function updateRankingWithRealResults(week) {
     
     console.log(`📊 Risultati recuperati: ${Object.keys(allResults).length} squadre`);
     
-    // 2. Carica tutte le formazioni confermate da MongoDB
+    // 2. Carica tutte le formazioni confermate da MongoDB per questa settimana
     const db = await connectMongo();
-    const formations = await db.collection('formations').find({ confirmed: true }).toArray();
+    const formations = await db.collection('formations').find({ 
+      confirmed: true,
+      week: week 
+    }).toArray();
+    
+    console.log(`📋 Trovate ${formations.length} formazioni confermate per la settimana ${week}`);
+    
     const ranking = await loadRankingData();
     
     let updatedUsers = 0;
