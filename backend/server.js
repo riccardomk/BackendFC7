@@ -378,6 +378,10 @@ const app = express();
 app.use(helmet());
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
+// Endpoint root per monitoraggio UptimeRobot
+app.get('/', (req, res) => {
+  res.status(200).send('BackendFC7 attivo');
+});
 
 // ===== ROUTE ADMIN: INVIO NOTIFICA DI TEST A TUTTI =====
 app.post('/admin/send-test-notification-all', async (req, res) => {
