@@ -306,17 +306,38 @@ async function saveRankingData(data) {
   );
 }
 function calcolaPunteggioGiornata(clubsSchierati, results) {
+  // Funzione helper per normalizzare stringhe
+  const normalize = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/gi, '');
+  
   let punti = 0;
   let golFatti = 0;
   let golSubiti = 0;
+  
   for (const club of clubsSchierati) {
-    const res = results[club];
-    if (!res) continue;
+    // Prova prima match esatto
+    let res = results[club];
+    
+    // Se non trova match esatto, prova match normalizzato
+    if (!res) {
+      const normalizedClub = normalize(club);
+      const matchedKey = Object.keys(results).find(key => normalize(key) === normalizedClub);
+      if (matchedKey) {
+        res = results[matchedKey];
+        console.log(`🔄 Match fuzzy: "${club}" → "${matchedKey}"`);
+      }
+    }
+    
+    if (!res) {
+      console.log(`⚠️ Nessun risultato trovato per: "${club}"`);
+      continue;
+    }
+    
     if (res.esito === 'W') punti += 3;
     else if (res.esito === 'D') punti += 1;
     golFatti += res.gf;
     golSubiti += res.gs;
   }
+  
   const diffReti = golFatti - golSubiti;
   return { punti, golFatti, golSubiti, diffReti };
 }
@@ -904,46 +925,127 @@ app.get('/formation/:userId', async (req, res) => {
 
 // ===== SISTEMA AUTOMAZIONE RISULTATI REALI =====
 // Mappa squadre per normalizzare nomi tra API e app
+// Questa mappa converte i nomi API ufficiali nei nomi usati dall'app
 const TEAM_MAPPING = {
-  // Serie A
+  // Serie A - Nomi ufficiali API
+  'SSC Napoli': 'SSC Napoli',
+  'FC Internazionale Milano': 'FC Internazionale Milano',
+  'Atalanta BC': 'Atalanta BC',
+  'Juventus FC': 'Juventus FC',
+  'AS Roma': 'AS Roma',
+  'ACF Fiorentina': 'ACF Fiorentina',
+  'SS Lazio': 'SS Lazio',
   'AC Milan': 'AC Milan',
-  'Inter Milan': 'Inter',
-  'Juventus FC': 'Juventus',
-  'AS Roma': 'AS Roma', 
-  'SSC Napoli': 'Napoli',
-  'Atalanta BC': 'Atalanta',
-  'ACF Fiorentina': 'Fiorentina',
-  'SS Lazio': 'Lazio',
-  'Torino FC': 'Torino',
-  'Udinese Calcio': 'Udinese',
-  // Premier League
-  'Manchester United FC': 'Manchester United',
-  'Manchester City FC': 'Manchester City', 
-  'Liverpool FC': 'Liverpool',
-  'Arsenal FC': 'Arsenal',
-  'Chelsea FC': 'Chelsea',
-  'Tottenham Hotspur FC': 'Tottenham',
-  // LaLiga
-  'Real Madrid CF': 'Real Madrid',
-  'FC Barcelona': 'Barcelona',
-  'Atlético de Madrid': 'Atletico Madrid',
-  'Sevilla FC': 'Sevilla',
-  'Valencia CF': 'Valencia',
-  // Bundesliga 
-  'FC Bayern München': 'Bayern Munich',
+  'Bologna FC 1909': 'Bologna FC 1909',
+  'Como 1907': 'Como 1907',
+  'Torino FC': 'Torino FC',
+  'Udinese Calcio': 'Udinese Calcio',
+  'Genoa CFC': 'Genoa CFC',
+  'Hellas Verona FC': 'Hellas Verona FC',
+  'Cagliari Calcio': 'Cagliari Calcio',
+  'Parma Calcio 1913': 'Parma Calcio 1913',
+  'US Lecce': 'US Lecce',
+  'US Sassuolo Calcio': 'US Sassuolo Calcio',
+  'AC Pisa 1909': 'AC Pisa 1909',
+  'US Cremonese': 'US Cremonese',
+  // Premier League - Nomi ufficiali API
+  'Liverpool FC': 'Liverpool FC',
+  'Arsenal FC': 'Arsenal FC',
+  'Manchester City FC': 'Manchester City FC',
+  'Chelsea FC': 'Chelsea FC',
+  'Newcastle United FC': 'Newcastle United FC',
+  'Aston Villa FC': 'Aston Villa FC',
+  'Nottingham Forest FC': 'Nottingham Forest FC',
+  'Brighton & Hove Albion FC': 'Brighton & Hove Albion FC',
+  'AFC Bournemouth': 'AFC Bournemouth',
+  'Brentford FC': 'Brentford FC',
+  'Fulham FC': 'Fulham FC',
+  'Crystal Palace FC': 'Crystal Palace FC',
+  'Everton FC': 'Everton FC',
+  'West Ham United FC': 'West Ham United FC',
+  'Manchester United FC': 'Manchester United FC',
+  'Wolverhampton Wanderers FC': 'Wolverhampton Wanderers FC',
+  'Tottenham Hotspur FC': 'Tottenham Hotspur FC',
+  'Burnley FC': 'Burnley FC',
+  'Leeds United FC': 'Leeds United FC',
+  'Sunderland AFC': 'Sunderland AFC',
+  // LaLiga - Nomi ufficiali API
+  'FC Barcelona': 'FC Barcelona',
+  'Real Madrid CF': 'Real Madrid CF',
+  'Atlético de Madrid': 'Atlético de Madrid',
+  'Athletic Club': 'Athletic Club',
+  'Villarreal CF': 'Villarreal CF',
+  'Real Betis Balompié': 'Real Betis Balompié',
+  'RC Celta de Vigo': 'RC Celta de Vigo',
+  'Rayo Vallecano de Madrid': 'Rayo Vallecano de Madrid',
+  'CA Osasuna': 'CA Osasuna',
+  'RCD Mallorca': 'RCD Mallorca',
+  'Real Sociedad de Fútbol': 'Real Sociedad de Fútbol',
+  'Valencia CF': 'Valencia CF',
+  'Getafe CF': 'Getafe CF',
+  'RCD Espanyol de Barcelona': 'RCD Espanyol de Barcelona',
+  'Deportivo Alavés': 'Deportivo Alavés',
+  'Girona FC': 'Girona FC',
+  'Sevilla FC': 'Sevilla FC',
+  'Real Oviedo': 'Real Oviedo',
+  'Elche CF': 'Elche CF',
+  'Levante UD': 'Levante UD',
+  // Bundesliga - Nomi ufficiali API
+  'FC Bayern München': 'FC Bayern München',
+  'Bayer 04 Leverkusen': 'Bayer 04 Leverkusen',
+  'Eintracht Frankfurt': 'Eintracht Frankfurt',
   'Borussia Dortmund': 'Borussia Dortmund',
+  'SC Freiburg': 'SC Freiburg',
+  '1. FSV Mainz 05': '1. FSV Mainz 05',
   'RB Leipzig': 'RB Leipzig',
-  'Bayer 04 Leverkusen': 'Bayer Leverkusen',
-  // Ligue 1
-  'Paris Saint-Germain FC': 'Paris Saint-Germain',
-  'Olympique de Marseille': 'Marseille',
-  'Olympique Lyonnais': 'Lyon',
-  'AS Monaco FC': 'Monaco'
+  'SV Werder Bremen': 'SV Werder Bremen',
+  'VfB Stuttgart': 'VfB Stuttgart',
+  'Borussia Mönchengladbach': 'Borussia Mönchengladbach',
+  'VfL Wolfsburg': 'VfL Wolfsburg',
+  'FC Augsburg': 'FC Augsburg',
+  '1. FC Union Berlin': '1. FC Union Berlin',
+  'FC St. Pauli': 'FC St. Pauli',
+  'TSG Hoffenheim': 'TSG Hoffenheim',
+  '1. FC Heidenheim': '1. FC Heidenheim',
+  '1. FC Köln': '1. FC Köln',
+  'Hamburger SV': 'Hamburger SV',
+  // Ligue 1 - Nomi ufficiali API
+  'Paris Saint-Germain FC': 'Paris Saint-Germain FC',
+  'Olympique de Marseille': 'Olympique de Marseille',
+  'AS Monaco FC': 'AS Monaco FC',
+  'OGC Nice': 'OGC Nice',
+  'Lille OSC': 'Lille OSC',
+  'Olympique Lyonnais': 'Olympique Lyonnais',
+  'RC Strasbourg Alsace': 'RC Strasbourg Alsace',
+  'Racing Club de Lens': 'Racing Club de Lens',
+  'Stade Brestois 29': 'Stade Brestois 29',
+  'Toulouse FC': 'Toulouse FC',
+  'AJ Auxerre': 'AJ Auxerre',
+  'Stade Rennais FC 1901': 'Stade Rennais FC 1901',
+  'FC Nantes': 'FC Nantes',
+  'Angers SCO': 'Angers SCO',
+  'Le Havre AC': 'Le Havre AC',
+  'FC Metz': 'FC Metz',
+  'FC Lorient': 'FC Lorient',
+  'Paris FC': 'Paris FC'
 };
 
 // Funzione per normalizzare nomi squadre
 function normalizeTeamName(apiName) {
-  return TEAM_MAPPING[apiName] || apiName;
+  // Normalizzazione base: rimuove accenti, spazi e caratteri speciali
+  const normalize = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/gi, '');
+  
+  // Prima prova match esatto
+  if (TEAM_MAPPING[apiName]) return TEAM_MAPPING[apiName];
+  
+  // Poi prova match normalizzato
+  const normalizedInput = normalize(apiName);
+  for (const [key, value] of Object.entries(TEAM_MAPPING)) {
+    if (normalize(key) === normalizedInput) return value;
+  }
+  
+  // Fallback: restituisce il nome originale
+  return apiName;
 }
 
 // Funzione per recuperare risultati di una giornata specifica
