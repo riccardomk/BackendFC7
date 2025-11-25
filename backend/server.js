@@ -1350,6 +1350,32 @@ app.post('/admin/update-ranking-auto/:week', async (req, res) => {
   }
 });
 
+// Endpoint di test per salvare formazione con settimana specifica (SOLO PER TEST)
+app.post('/admin/formation-test/:userId/:week', async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const week = parseInt(req.params.week);
+    const { starters } = req.body;
+    
+    if (!Array.isArray(starters) || starters.length !== 11) {
+      return res.status(400).json({ error: 'Serve array di 11 squadre' });
+    }
+    
+    const formationObj = {
+      starters,
+      confirmed: true,
+      timestamp: new Date().toISOString(),
+      week: week
+    };
+    
+    await saveFormationData(userId, formationObj);
+    console.log(`✅ [TEST] Formazione salvata per ${userId} - Settimana ${week}`);
+    res.json({ ok: true, starters, week });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ===== ROUTE ADMIN: VERIFICA RISULTATI DISPONIBILI =====
 app.get('/admin/check-results/:league/:week', async (req, res) => {
   try {
