@@ -1,0 +1,38 @@
+{
+	"A.C. Cjoc": {
+		"week": 14,
+		"starters": [
+			"Atalanta BC",
+			"Juventus FC",
+			"AS Roma",
+			"Manchester City FC",
+			"Tottenham Hotspur FC",
+			"West Ham United FC",
+			"FC Barcelona",
+			"Real Madrid CF",
+			"Levante UD",
+			"FC Bayern München",
+			"Borussia Dortmund"
+		],
+		"confirmed": true,
+		"timestamp": "2025-11-21T21:32:15.773Z"
+	},
+	"FC Ricca": {
+		"week": 14,
+		"starters": [
+			"Arsenal FC",
+			"Liverpool FC",
+			"Chelsea FC",
+			"Inter Milan",
+			"AC Milan",
+			"Napoli",
+			"Real Sociedad de Fútbol",
+			"Sevilla FC",
+			"Borussia Mönchengladbach",
+			"Bayer 04 Leverkusen",
+			"Paris Saint-Germain FC"
+		],
+		"confirmed": true,
+		"timestamp": "2025-11-21T21:35:00.000Z"
+	}
+}
