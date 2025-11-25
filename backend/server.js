@@ -173,6 +173,19 @@ const FOOTBALL_DATA_CODES = {
   'Ligue 1': 'FL1',
 };
 
+// Mappa settimana comune → giornata effettiva per lega
+// Bundesliga è indietro di 1 giornata rispetto alle altre
+const WEEK_TO_MATCHDAY = {
+  11: { 'Serie A': 11, 'Premier League': 11, 'LaLiga': 11, 'Bundesliga': 10, 'Ligue 1': 11 },
+  12: { 'Serie A': 12, 'Premier League': 12, 'LaLiga': 12, 'Bundesliga': 11, 'Ligue 1': 12 },
+  13: { 'Serie A': 13, 'Premier League': 13, 'LaLiga': 13, 'Bundesliga': 12, 'Ligue 1': 13 },
+  14: { 'Serie A': 14, 'Premier League': 14, 'LaLiga': 14, 'Bundesliga': 13, 'Ligue 1': 14 },
+  15: { 'Serie A': 15, 'Premier League': 15, 'LaLiga': 15, 'Bundesliga': 14, 'Ligue 1': 15 },
+  16: { 'Serie A': 16, 'Premier League': 16, 'LaLiga': 16, 'Bundesliga': 15, 'Ligue 1': 16 },
+  17: { 'Serie A': 17, 'Premier League': 17, 'LaLiga': 17, 'Bundesliga': 16, 'Ligue 1': 17 },
+  18: { 'Serie A': 18, 'Premier League': 18, 'LaLiga': 18, 'Bundesliga': 17, 'Ligue 1': 18 }
+};
+
 // Mappa delle stagioni per ogni lega (Bundesliga usa 2024, le altre 2025)
 const LEAGUE_SEASONS = {
   'Serie A': 2025,
@@ -1212,11 +1225,13 @@ async function fetchMatchResults(league, matchday) {
   const code = FOOTBALL_DATA_CODES[league];
   if (!code) return {};
   
+  // Usa la mappa WEEK_TO_MATCHDAY per convertire settimana in giornata specifica
+  const actualMatchday = WEEK_TO_MATCHDAY[matchday]?.[league] || matchday;
   const season = LEAGUE_SEASONS[league] || 2025;
   
   try {
-    console.log(`🔄 Recupero risultati ${league} - Giornata ${matchday} (Stagione ${season})`);
-    const res = await fetch(`${FOOTBALL_DATA_API}/${code}/matches?matchday=${matchday}&season=${season}`, {
+    console.log(`🔄 Recupero risultati ${league} - Settimana ${matchday} → Giornata ${actualMatchday} (Stagione ${season})`);
+    const res = await fetch(`${FOOTBALL_DATA_API}/${code}/matches?matchday=${actualMatchday}&season=${season}`, {
       headers: { 'X-Auth-Token': FOOTBALL_DATA_TOKEN }
     });
     
