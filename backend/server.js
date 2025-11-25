@@ -536,6 +536,54 @@ app.post('/login', async (req, res) => {
   const { password: _, ...userSafe } = user;
   res.json({ user: userSafe });
 });
+
+// ===== RECUPERO PASSWORD =====
+app.post('/forgot-password', async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name || typeof name !== 'string' || name.trim().length < 3) {
+      return res.status(400).json({ error: 'Nome profilo non valido' });
+    }
+    
+    const user = await findUserByName(name.trim());
+    if (!user) {
+      return res.status(404).json({ error: 'Utente non trovato' });
+    }
+    
+    if (!user.email) {
+      return res.status(400).json({ error: 'Nessuna email associata a questo profilo' });
+    }
+    
+    // Genera password temporanea (8 caratteri alfanumerici)
+    const tempPassword = Math.random().toString(36).slice(-8);
+    const hashedPassword = bcrypt.hashSync(tempPassword, 10);
+    
+    // Aggiorna password nel database
+    const db = await connectMongo();
+    await db.collection('users').updateOne(
+      { name: user.name },
+      { $set: { password: hashedPassword } }
+    );
+    
+    // Log per debug (in produzione inviare email vera)
+    console.log(`[RECUPERO PASSWORD] ${user.name} - Email: ${user.email} - Nuova password: ${tempPassword}`);
+    
+    // TODO: Inviare email vera con servizio email (SendGrid, Mailgun, ecc.)
+    // Per ora simuliamo l'invio
+    
+    res.json({ 
+      success: true, 
+      message: 'Password temporanea inviata via email',
+      // RIMUOVERE IN PRODUZIONE - solo per debug:
+      debug_password: tempPassword,
+      debug_email: user.email
+    });
+  } catch (error) {
+    console.error('[ERRORE RECUPERO PASSWORD]', error);
+    res.status(500).json({ error: 'Errore del server' });
+  }
+});
+
 app.post('/register', async (req, res) => {
   const { name, email, password, fcmToken } = req.body;
   if (!name || !email || !password) return res.status(400).json({ error: 'Tutti i campi sono obbligatori' });
