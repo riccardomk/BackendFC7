@@ -949,8 +949,23 @@ app.get('/market/:username', async (req, res) => {
   try {
     const username = req.params.username;
     const data = await loadMarketData();
-    const userData = data.users[username];
+    let userData = data.users[username];
     if (!userData) return res.status(404).json({ error: 'Nessun dato mercato per questo utente' });
+    
+    // Se il mercato è aperto e siamo in una nuova finestra, sblocca automaticamente
+    if (userData.confirmed && isMercatoOpen()) {
+      const now = new Date();
+      const currentWindow = mercatoWindows.find(win => new Date(win.start) <= now && now <= new Date(win.end));
+      if (currentWindow && userData.lastWindow !== currentWindow.start) {
+        userData.confirmed = false;
+        userData.cambi = 0;
+        userData.lastWindow = currentWindow.start;
+        // Salva subito nel database
+        data.users[username] = userData;
+        await saveMarketData(data);
+      }
+    }
+    
     res.json(userData);
   } catch (e) {
     res.status(500).json({ error: 'Errore mercato get' });
