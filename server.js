@@ -974,9 +974,12 @@ app.get('/market/:username', async (req, res) => {
           userData.confirmed = false;
           userData.cambi = 0;
           userData.lastWindow = currentWindow.start;
+          // Aggiorna i valori delle squadre in base alla classifica attuale
+          await aggiornaValoriSquadreMercato();
           data.users[username] = userData;
           await saveMarketData(data);
           console.log(`✅ MERCATO SBLOCCATO per ${username} - Finestra: ${currentWindow.start}`);
+          console.log(`📊 Valori squadre aggiornati in base alla classifica`);
         }
       }
     }
