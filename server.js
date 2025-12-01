@@ -886,6 +886,18 @@ app.post('/market/:username', async (req, res) => {
     const { credits, selected, confirmed, vendita, acquisto, valoreVendita, valoreAcquisto } = req.body;
     if (!username) return res.status(400).json({ error: 'Username mancante' });
     let data = await loadMarketData();
+    
+    // --- CONTROLLO NUOVA FINESTRA: resetta confirmed se mercato aperto ---
+    if (data.users[username] && data.users[username].confirmed && isMercatoOpen()) {
+      const now = new Date();
+      const currentWindow = mercatoWindows.find(win => new Date(win.start) <= now && now <= new Date(win.end));
+      if (currentWindow && data.users[username].lastWindow !== currentWindow.start) {
+        data.users[username].confirmed = false;
+        data.users[username].cambi = 0;
+        data.users[username].lastWindow = currentWindow.start;
+      }
+    }
+    
     // --- FASE INIZIALE: salvataggio sempre libero finché non confermato ---
     if (!data.users[username] || !data.users[username].confirmed) {
       data.users[username] = {
