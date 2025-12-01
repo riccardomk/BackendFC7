@@ -848,33 +848,53 @@ const mercatoWindows = [
 function isMercatoOpen(now = new Date()) {
   return mercatoWindows.some(win => new Date(win.start) <= now && now <= new Date(win.end));
 }
-  // === LOGICA AGGIORNAMENTO VALORI SQUADRE IN BASE ALLA CLASSIFICA ===
+  // === LOGICA AGGIORNAMENTO VALORI SQUADRE IN BASE ALLA CLASSIFICA REALE ===
   async function aggiornaValoriSquadreMercato() {
-    // Carica ranking globale
-    const ranking = await loadRankingData();
-    // Carica dati mercato
+    console.log('🔄 Inizio aggiornamento valori squadre...');
+    
     let marketData = await loadMarketData();
-    // Ottieni array ordinato per posizione
-    const arr = Object.entries(ranking.global).map(([username, stats]) => ({ username, ...stats }));
-    arr.sort((a, b) => {
-      if (b.punti !== a.punti) return b.punti - a.punti;
-      if (b.diffReti !== a.diffReti) return b.diffReti - a.diffReti;
-      return b.golFatti - a.golFatti;
-    });
-    // Esempio: tabella valori per posizione (personalizza come vuoi)
-    const valoriPerPosizione = [20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
-    // Aggiorna valore per ogni squadra in base alla posizione
-    arr.forEach((user, idx) => {
-      // Trova la squadra associata all'utente (se la struttura lo consente)
-      // Qui si assume che ogni username sia una squadra, altrimenti adatta la logica
-      const squadra = user.username;
-      const valore = valoriPerPosizione[idx] || 1;
-      if (!marketData.squadre) marketData.squadre = {};
-      if (!marketData.squadre[squadra]) marketData.squadre[squadra] = {};
-      marketData.squadre[squadra].valoreAcquisto = valore;
-    });
+    if (!marketData.squadre) marketData.squadre = {};
+    
+    // Valori base per tutte le squadre
+    const LEAGUE_CODES = ['SA', 'PL', 'PD', 'BL1', 'FL1'];
+    const LEAGUE_NAMES = {
+      'SA': 'Serie A',
+      'PL': 'Premier League',
+      'PD': 'LaLiga',
+      'BL1': 'Bundesliga',
+      'FL1': 'Ligue 1'
+    };
+    
+    for (const code of LEAGUE_CODES) {
+      try {
+        const res = await fetch(`${FOOTBALL_DATA_API}/${code}/standings?season=2025`, {
+          headers: { 'X-Auth-Token': FOOTBALL_DATA_TOKEN }
+        });
+        
+        if (!res.ok) continue;
+        
+        const data = await res.json();
+        const standings = data.standings[0]?.table || [];
+        
+        // Assegna valori in base alla posizione: 1° = 20, 2° = 19, ... 20° = 1
+        standings.forEach((team, idx) => {
+          const teamName = normalizeTeamName(team.team.name);
+          const valore = Math.max(20 - idx, 1); // Minimo 1 credito
+          
+          if (!marketData.squadre[teamName]) marketData.squadre[teamName] = {};
+          marketData.squadre[teamName].valoreAcquisto = valore;
+          marketData.squadre[teamName].posizione = idx + 1;
+          marketData.squadre[teamName].lega = LEAGUE_NAMES[code];
+        });
+        
+        console.log(`✅ ${LEAGUE_NAMES[code]}: ${standings.length} squadre aggiornate`);
+      } catch (e) {
+        console.error(`❌ Errore aggiornamento ${LEAGUE_NAMES[code]}:`, e.message);
+      }
+    }
+    
     await saveMarketData(marketData);
-    console.log('Valori squadre aggiornati in base alla classifica!');
+    console.log('✅ Valori squadre aggiornati in base alle classifiche reali!');
   }
 
 // === LOGICA LIMITI CAMBI ===
