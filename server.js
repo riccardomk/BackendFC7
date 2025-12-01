@@ -964,17 +964,20 @@ app.get('/market/:username', async (req, res) => {
     let userData = data.users[username];
     if (!userData) return res.status(404).json({ error: 'Nessun dato mercato per questo utente' });
     
-    // Se il mercato è aperto e siamo in una nuova finestra, sblocca automaticamente
-    if (userData.confirmed && isMercatoOpen()) {
+    // SBLOCCO FORZATO: Se il mercato è aperto, sblocca SEMPRE
+    if (isMercatoOpen()) {
       const now = new Date();
       const currentWindow = mercatoWindows.find(win => new Date(win.start) <= now && now <= new Date(win.end));
-      if (currentWindow && userData.lastWindow !== currentWindow.start) {
-        userData.confirmed = false;
-        userData.cambi = 0;
-        userData.lastWindow = currentWindow.start;
-        // Salva subito nel database
-        data.users[username] = userData;
-        await saveMarketData(data);
+      if (currentWindow) {
+        // Se è una nuova finestra O se confirmed è true, sblocca
+        if (userData.lastWindow !== currentWindow.start || userData.confirmed) {
+          userData.confirmed = false;
+          userData.cambi = 0;
+          userData.lastWindow = currentWindow.start;
+          data.users[username] = userData;
+          await saveMarketData(data);
+          console.log(`✅ MERCATO SBLOCCATO per ${username} - Finestra: ${currentWindow.start}`);
+        }
       }
     }
     
