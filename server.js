@@ -252,7 +252,7 @@ async function getLastFinishedMatchdayForAllLeagues() {
   return matchdays;
 }
 
-// Mappa delle stagioni per ogni lega (Bundesliga usa 2024, le altre 2025)
+// Mappa delle stagioni per ogni lega (Bundesliga usa 2025, le altre 2025)
 const LEAGUE_SEASONS = {
   'Serie A': 2025,
   'Premier League': 2025,
@@ -1690,6 +1690,25 @@ app.post('/admin/update-ranking-auto/:week', async (req, res) => {
     console.error('Errore aggiornamento automatico:', e.message);
     res.status(500).json({ 
       error: 'Errore aggiornamento automatico', 
+      details: e.message 
+    });
+  }
+});
+
+// Test endpoint per verificare il rilevamento automatico dei matchday
+app.get('/admin/test-matchday-detection', async (req, res) => {
+  try {
+    console.log('🧪 TEST: Rilevamento automatico matchday...');
+    const matchdays = await getLastFinishedMatchdayForAllLeagues();
+    res.json({ 
+      ok: true, 
+      matchdays,
+      timestamp: new Date().toISOString()
+    });
+  } catch (e) {
+    console.error('❌ Errore test matchday:', e.message);
+    res.status(500).json({ 
+      error: 'Errore rilevamento matchday', 
       details: e.message 
     });
   }
