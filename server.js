@@ -230,8 +230,8 @@ async function getLastFinishedMatchdayForAllLeagues() {
         console.log(`  ✅ ${league}: matchday ${matchdays[league]}`);
       }
       
-      // Piccola pausa per evitare rate limiting
-      await new Promise(resolve => setTimeout(resolve, 200));
+      // Pausa più lunga per evitare rate limiting (1 secondo)
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
     } catch (error) {
       console.error(`❌ Errore rilevamento ${league}:`, error.message);
@@ -388,9 +388,12 @@ async function getNextCommonWeekAndFirstMatch() {
     
     console.log(`📅 Prossima settimana: ${nextWeek}, prima partita: ${firstMatchDate}`);
     
+    // Assicurati che firstMatchDate sia sempre un Date valido
+    const validFirstMatch = firstMatchDate ? firstMatchDate : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    
     return {
       week: nextWeek,
-      firstMatch: firstMatchDate || new Date()
+      firstMatch: validFirstMatch
     };
   } catch (error) {
     console.error('❌ Errore getNextCommonWeekAndFirstMatch:', error.message);
