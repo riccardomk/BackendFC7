@@ -181,8 +181,19 @@ const FOOTBALL_DATA_CODES = {
   'Ligue 1': 'FL1',
 };
 
+// CACHE per evitare troppi call all'API (rate limiting 429)
+let MATCHDAYS_CACHE = null;
+let MATCHDAYS_CACHE_TIME = null;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minuti
+
 // Funzione per trovare la PROSSIMA giornata comune schedulata (non quella finita!)
 async function getLastFinishedMatchdayForAllLeagues() {
+  // Se ho cache valida, ritorno subito
+  if (MATCHDAYS_CACHE && MATCHDAYS_CACHE_TIME && (Date.now() - MATCHDAYS_CACHE_TIME < CACHE_DURATION)) {
+    console.log('✨ Uso cache matchdays (valida per altri', Math.round((CACHE_DURATION - (Date.now() - MATCHDAYS_CACHE_TIME)) / 1000), 'secondi)');
+    return MATCHDAYS_CACHE;
+  }
+  
   const leagueCodes = {
     'Serie A': 'SA',
     'Premier League': 'PL',
@@ -194,7 +205,7 @@ async function getLastFinishedMatchdayForAllLeagues() {
   const matchdays = {};
   const now = new Date();
   
-  console.log('🔍 Rilevo la PROSSIMA giornata comune schedulata...');
+  console.log('🔍 Rilevo la PROSSIMA giornata comune schedulata (chiamata API)...');
   
   for (const [league, code] of Object.entries(leagueCodes)) {
     try {
@@ -242,16 +253,25 @@ async function getLastFinishedMatchdayForAllLeagues() {
   if (Object.keys(matchdays).length < 5) {
     console.warn('⚠️ Non ho trovato tutti i matchday, uso fallback settimana corrente');
     // Fallback ai valori della prossima settimana comune (week 15)
-    return {
+    const fallback = {
       'Serie A': matchdays['Serie A'] || 14,
-      'Premier League': matchdays['Premier League'] || 15,
+      'Premier League': matchdays['Premier League'] || 14,
       'LaLiga': matchdays['LaLiga'] || 15,
       'Bundesliga': matchdays['Bundesliga'] || 13,
       'Ligue 1': matchdays['Ligue 1'] || 15
     };
+    // Salvo anche il fallback in cache
+    MATCHDAYS_CACHE = fallback;
+    MATCHDAYS_CACHE_TIME = Date.now();
+    return fallback;
   }
   
   console.log('✅ Prossima giornata comune rilevata!');
+  
+  // Salvo in cache prima di ritornare
+  MATCHDAYS_CACHE = matchdays;
+  MATCHDAYS_CACHE_TIME = Date.now();
+  
   return matchdays;
 }
 
@@ -331,7 +351,7 @@ function checkCalendariCommonWeek() {
   }
 }
 // Controllo all’avvio del server
-checkCalendariCommonWeek();
+// DEPRECATO: checkCalendariCommonWeek();
 // Trova la prossima settimana comune e la prima partita usando i matchday delle API
 async function getNextCommonWeekAndFirstMatch() {
   try {
