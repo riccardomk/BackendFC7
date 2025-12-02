@@ -2093,7 +2093,7 @@ function getNotificationSchedule() {
   // Calcola date/orari per notifiche formazione
   const nextFormation = getNextCommonWeekAndFirstMatch();
   let formationNotifications = [];
-  if (nextFormation) {
+  if (nextFormation && nextFormation.firstMatch) {
     const firstMatch = nextFormation.firstMatch;
     // Reminder settimanale: 3 giorni prima
     const reminderDate = new Date(firstMatch.getTime() - 3 * 24 * 60 * 60 * 1000);
@@ -2107,6 +2107,8 @@ function getNotificationSchedule() {
     // Per semplicità, prendiamo la data della prima partita + 1 giorno
     const feedbackDate = new Date(firstMatch.getTime() + 24 * 60 * 60 * 1000);
     formationNotifications.push({ type: 'feedback_giornata', date: feedbackDate });
+  } else {
+    console.warn('⚠️ nextFormation.firstMatch non disponibile, skip notifiche formazione');
   }
 
   // Calcola date/orari per notifiche mercato
