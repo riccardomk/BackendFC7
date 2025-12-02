@@ -179,6 +179,7 @@ const FOOTBALL_DATA_CODES = {
 };
 
 // Funzione per trovare automaticamente l'ultima giornata finita per ogni lega
+// Usa una singola chiamata per lega per evitare rate limiting
 async function getLastFinishedMatchdayForAllLeagues() {
   const result = {};
   
@@ -187,41 +188,39 @@ async function getLastFinishedMatchdayForAllLeagues() {
     const season = LEAGUE_SEASONS[league] || 2025;
     
     try {
-      // Ottieni info sulla competizione per sapere la matchday corrente
-      const compRes = await fetch(`${FOOTBALL_DATA_API}/${code}`, {
-        headers: { 'X-Auth-Token': FOOTBALL_DATA_TOKEN }
-      });
+      // Prova matchday 13 e 14 (le giornate più probabili per fine novembre)
+      let foundMatchday = null;
       
-      if (!compRes.ok) {
-        console.warn(`⚠️ ${league}: errore API (${compRes.status}), uso fallback`);
-        result[league] = 13; // Fallback sicuro
-        continue;
-      }
-      
-      const compData = await compRes.json();
-      const currentMatchday = compData.currentSeason?.currentMatchday || 14;
-      
-      // Cerca l'ultima giornata con partite finite (partendo dalla currentMatchday e andando indietro)
-      let lastFinished = null;
-      
-      for (let md = currentMatchday; md >= Math.max(1, currentMatchday - 3); md--) {
+      for (const md of [14, 13, 12]) {
         const matchRes = await fetch(`${FOOTBALL_DATA_API}/${code}/matches?matchday=${md}&season=${season}`, {
           headers: { 'X-Auth-Token': FOOTBALL_DATA_TOKEN }
         });
         
-        if (!matchRes.ok) continue;
+        if (!matchRes.ok) {
+          if (matchRes.status === 429) {
+            console.warn(`⚠️ ${league}: rate limit, attendo 2s...`);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            continue;
+          }
+          continue;
+        }
         
         const matchData = await matchRes.json();
-        const finishedMatches = (matchData.matches || []).filter(m => m.status === 'FINISHED');
+        const matches = matchData.matches || [];
+        const finishedMatches = matches.filter(m => m.status === 'FINISHED');
         
-        if (finishedMatches.length > 0) {
-          lastFinished = md;
-          console.log(`✅ ${league}: ultima giornata finita = ${md} (${finishedMatches.length} partite)`);
+        // Se almeno metà partite sono finite, questa è l'ultima giornata
+        if (finishedMatches.length > 0 && finishedMatches.length >= matches.length * 0.5) {
+          foundMatchday = md;
+          console.log(`✅ ${league}: matchday ${md} (${finishedMatches.length}/${matches.length} finite)`);
           break;
         }
       }
       
-      result[league] = lastFinished || currentMatchday - 1;
+      result[league] = foundMatchday || 13;
+      
+      // Piccola pausa per evitare rate limiting
+      await new Promise(resolve => setTimeout(resolve, 300));
       
     } catch (e) {
       console.error(`❌ Errore ${league}:`, e.message);
