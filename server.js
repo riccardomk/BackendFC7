@@ -329,35 +329,71 @@ function checkCalendariCommonWeek() {
 }
 // Controllo all’avvio del server
 checkCalendariCommonWeek();
-// Trova la prossima settimana comune e la prima partita (solo se tutte le leghe hanno la giornata)
-function getNextCommonWeekAndFirstMatch() {
-  // Trova la prossima settimana comune
-  const weeks = {};
-  for (const league in CALENDARI) {
-    for (const g of CALENDARI[league]) {
-      if (!weeks[g.week]) weeks[g.week] = [];
-      weeks[g.week].push({ league, date: g.date });
+// Trova la prossima settimana comune e la prima partita usando i matchday delle API
+async function getNextCommonWeekAndFirstMatch() {
+  try {
+    // Usa i matchday rilevati automaticamente dalle API
+    const matchdays = await getLastFinishedMatchdayForAllLeagues();
+    
+    // Calcola la media dei matchday come numero di settimana
+    const avgMatchday = Math.round(
+      Object.values(matchdays).reduce((sum, md) => sum + md, 0) / 5
+    );
+    
+    // La prossima settimana è l'ultima finita + 1
+    const nextWeek = avgMatchday + 1;
+    
+    // Trova la prima partita della prossima giornata controllando le API
+    const leagueCodes = {
+      'Serie A': 'SA',
+      'Premier League': 'PL',
+      'LaLiga': 'PD',
+      'Bundesliga': 'BL1',
+      'Ligue 1': 'FL1'
+    };
+    
+    let firstMatchDate = null;
+    
+    for (const [league, code] of Object.entries(leagueCodes)) {
+      const nextMatchday = matchdays[league] + 1;
+      
+      try {
+        const response = await fetch(
+          `https://api.football-data.org/v4/competitions/${code}/matches?matchday=${nextMatchday}&status=SCHEDULED`,
+          { headers: { 'X-Auth-Token': FOOTBALL_API_TOKEN } }
+        );
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.matches && data.matches.length > 0) {
+            const firstMatch = data.matches.sort((a, b) => 
+              new Date(a.utcDate) - new Date(b.utcDate)
+            )[0];
+            
+            const matchDate = new Date(firstMatch.utcDate);
+            if (!firstMatchDate || matchDate < firstMatchDate) {
+              firstMatchDate = matchDate;
+            }
+          }
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 200));
+      } catch (error) {
+        console.error(`Errore fetch prossima giornata ${league}:`, error.message);
+      }
     }
+    
+    console.log(`📅 Prossima settimana: ${nextWeek}, prima partita: ${firstMatchDate}`);
+    
+    return {
+      week: nextWeek,
+      firstMatch: firstMatchDate || new Date()
+    };
+  } catch (error) {
+    console.error('❌ Errore getNextCommonWeekAndFirstMatch:', error.message);
+    // Fallback: usa week 15 come default
+    return { week: 15, firstMatch: new Date() };
   }
-  const totalLeagues = Object.keys(CALENDARI).length;
-  const now = new Date();
-  const commonWeeks = Object.entries(weeks)
-    .filter(([week, arr]) => arr.length === totalLeagues)
-    .map(([week, arr]) => ({
-      week: parseInt(week),
-      dates: arr.map(x => x.date)
-    }))
-    // Ordina per data della prima partita della settimana
-    .sort((a, b) => {
-      const dateA = new Date(a.dates.sort()[0]);
-      const dateB = new Date(b.dates.sort()[0]);
-      return dateA - dateB;
-    });
-  // Trova la prima settimana comune con data >= oggi
-  const next = commonWeeks.find(w => new Date(w.dates.sort()[0]) >= now);
-  if (!next) return null;
-  const firstMatch = new Date(next.dates.sort()[0]);
-  return { week: next.week, firstMatch };
 }
 
 
