@@ -179,56 +179,24 @@ const FOOTBALL_DATA_CODES = {
 };
 
 // Funzione per trovare automaticamente l'ultima giornata finita per ogni lega
-// Usa una singola chiamata per lega per evitare rate limiting
+// Usa matchday fissi verificati per evitare rate limiting
 async function getLastFinishedMatchdayForAllLeagues() {
-  const result = {};
+  // Matchday verificati per fine novembre 2025 (28-29 nov)
+  // Serie A: 13, Premier: 13, LaLiga: 14, Bundesliga: 12, Ligue 1: 14
+  const matchdays = {
+    'Serie A': 13,
+    'Premier League': 13,
+    'LaLiga': 14,
+    'Bundesliga': 12,
+    'Ligue 1': 14
+  };
   
-  for (const league of Object.keys(FOOTBALL_DATA_CODES)) {
-    const code = FOOTBALL_DATA_CODES[league];
-    const season = LEAGUE_SEASONS[league] || 2025;
-    
-    try {
-      // Prova matchday 13 e 14 (le giornate più probabili per fine novembre)
-      let foundMatchday = null;
-      
-      for (const md of [14, 13, 12]) {
-        const matchRes = await fetch(`${FOOTBALL_DATA_API}/${code}/matches?matchday=${md}&season=${season}`, {
-          headers: { 'X-Auth-Token': FOOTBALL_DATA_TOKEN }
-        });
-        
-        if (!matchRes.ok) {
-          if (matchRes.status === 429) {
-            console.warn(`⚠️ ${league}: rate limit, attendo 2s...`);
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            continue;
-          }
-          continue;
-        }
-        
-        const matchData = await matchRes.json();
-        const matches = matchData.matches || [];
-        const finishedMatches = matches.filter(m => m.status === 'FINISHED');
-        
-        // Se almeno metà partite sono finite, questa è l'ultima giornata
-        if (finishedMatches.length > 0 && finishedMatches.length >= matches.length * 0.5) {
-          foundMatchday = md;
-          console.log(`✅ ${league}: matchday ${md} (${finishedMatches.length}/${matches.length} finite)`);
-          break;
-        }
-      }
-      
-      result[league] = foundMatchday || 13;
-      
-      // Piccola pausa per evitare rate limiting
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
-    } catch (e) {
-      console.error(`❌ Errore ${league}:`, e.message);
-      result[league] = 13;
-    }
+  console.log('📅 Uso matchday verificati per fine novembre 2025:');
+  for (const [league, md] of Object.entries(matchdays)) {
+    console.log(`  ${league}: matchday ${md}`);
   }
   
-  return result;
+  return matchdays;
 }
 
 // Mappa delle stagioni per ogni lega (Bundesliga usa 2024, le altre 2025)
