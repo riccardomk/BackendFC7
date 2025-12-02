@@ -20,6 +20,9 @@ const require = createRequire(import.meta.url);
 const jwt = require('jsonwebtoken');
 // fetch è già disponibile in Node.js 25+ come globale
 
+// ===== FOOTBALL API TOKEN =====
+const FOOTBALL_API_TOKEN = process.env.FOOTBALL_API_TOKEN || '81ed2d1e396e4164b91e079b249038df';
+
 // Configurazione FCM - USA SERVICE ACCOUNT per HTTP v1 API  
 const FCM_SERVER_KEY = process.env.FCM_SERVER_KEY; // Manteniamo per compatibilità
 const FCM_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'fantafc-12c98';
