@@ -2211,10 +2211,122 @@ setInterval(notificationRoutine, 60 * 1000);
 // Routine aggiornamento ranking automatico ogni 5 minuti
 setInterval(autoUpdateRankingRoutine, 5 * 60 * 1000);
 
+// ===== AUTOMAZIONE RANKING =====
+// Tiene traccia delle settimane già processate per evitare duplicati
+const processedWeeks = new Set();
+
+async function checkAndUpdateRankingAutomatically() {
+  try {
+    console.log('🔍 Controllo giornate finite...');
+    
+    // Rileva i matchday finiti
+    const matchdays = await getLastFinishedMatchdayForAllLeagues();
+    
+    // Per ogni lega, controlla se l'ultima partita è finita da almeno 3 minuti
+    const leagueCodes = {
+      'Serie A': 'SA',
+      'Premier League': 'PL',
+      'LaLiga': 'PD',
+      'Bundesliga': 'BL1',
+      'Ligue 1': 'FL1'
+    };
+    
+    const now = new Date();
+    let allLeaguesFinished = true;
+    let lastMatchTime = null;
+    
+    for (const [league, code] of Object.entries(leagueCodes)) {
+      const matchday = matchdays[league];
+      if (!matchday) {
+        allLeaguesFinished = false;
+        continue;
+      }
+      
+      try {
+        const response = await fetch(
+          `https://api.football-data.org/v4/competitions/${code}/matches?matchday=${matchday}&status=FINISHED`,
+          { headers: { 'X-Auth-Token': FOOTBALL_API_TOKEN } }
+        );
+        
+        if (!response.ok) continue;
+        
+        const data = await response.json();
+        
+        // Se non ci sono partite finite per questa giornata, non è ancora il momento
+        if (data.matches.length === 0) {
+          allLeaguesFinished = false;
+          break;
+        }
+        
+        // Trova l'ultima partita finita
+        const matches = data.matches.sort((a, b) => 
+          new Date(b.utcDate) - new Date(a.utcDate)
+        );
+        
+        if (matches.length > 0) {
+          const lastMatch = new Date(matches[0].utcDate);
+          // Aggiungi 2 ore per la durata della partita
+          const matchEndTime = new Date(lastMatch.getTime() + 2 * 60 * 60 * 1000);
+          
+          if (!lastMatchTime || matchEndTime > lastMatchTime) {
+            lastMatchTime = matchEndTime;
+          }
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+      } catch (error) {
+        console.error(`❌ Errore check ${league}:`, error.message);
+        allLeaguesFinished = false;
+      }
+    }
+    
+    // Se tutte le leghe hanno finito E sono passati almeno 3 minuti dall'ultima partita
+    if (allLeaguesFinished && lastMatchTime) {
+      const minutesSinceLastMatch = (now - lastMatchTime) / (1000 * 60);
+      
+      console.log(`⏱️ Minuti dall'ultima partita: ${Math.floor(minutesSinceLastMatch)}`);
+      
+      if (minutesSinceLastMatch >= 3) {
+        // Calcola il numero di settimana in base ai matchday
+        // Usa la media dei matchday come riferimento per la settimana
+        const avgMatchday = Math.round(
+          Object.values(matchdays).reduce((sum, md) => sum + md, 0) / 5
+        );
+        
+        const weekKey = `week-${avgMatchday}`;
+        
+        // Controlla se abbiamo già processato questa settimana
+        if (!processedWeeks.has(weekKey)) {
+          console.log(`🚀 AGGIORNAMENTO AUTOMATICO RANKING per settimana ${avgMatchday}!`);
+          
+          const result = await updateRankingWithRealResults(avgMatchday);
+          
+          console.log(`✅ Ranking aggiornato: ${result.usersUpdated} utenti, ${result.totalResults} risultati`);
+          
+          // Segna come processata
+          processedWeeks.add(weekKey);
+        } else {
+          console.log(`⏭️ Settimana ${avgMatchday} già processata, skip`);
+        }
+      }
+    }
+    
+  } catch (error) {
+    console.error('❌ Errore automazione ranking:', error.message);
+  }
+}
+
+// Avvia il controllo ogni ora (3600000 ms)
+setInterval(checkAndUpdateRankingAutomatically, 60 * 60 * 1000);
+
+// Primo controllo dopo 5 minuti dall'avvio
+setTimeout(checkAndUpdateRankingAutomatically, 5 * 60 * 1000);
+
 const PORT = process.env.PORT || 1000;
 app.listen(PORT, () => {
   console.log(`Server avviato sulla porta ${PORT}`);
-  console.log('🤖 Sistema automazione ranking attivato');
+  console.log('🤖 Sistema automazione ranking attivato - controllo ogni ora');
 });
 
 
