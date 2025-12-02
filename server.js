@@ -1714,6 +1714,25 @@ app.get('/admin/test-matchday-detection', async (req, res) => {
   }
 });
 
+// Endpoint per verificare utenti registrati
+app.get('/admin/users-count', async (req, res) => {
+  try {
+    const db = await connectMongo();
+    const usersCollection = db.collection('users');
+    const count = await usersCollection.countDocuments();
+    const users = await usersCollection.find({}, {
+      projection: { username: 1, email: 1, createdAt: 1, _id: 0 }
+    }).toArray();
+    res.json({ 
+      ok: true, 
+      count,
+      users
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Endpoint di test per salvare formazione con settimana specifica (SOLO PER TEST)
 app.post('/admin/formation-test/:userId/:week', async (req, res) => {
   try {
