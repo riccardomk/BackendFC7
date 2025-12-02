@@ -181,17 +181,17 @@ const FOOTBALL_DATA_CODES = {
 // Funzione per trovare automaticamente l'ultima giornata finita per ogni lega
 // Usa matchday fissi verificati per evitare rate limiting
 async function getLastFinishedMatchdayForAllLeagues() {
-  // Matchday verificati per fine novembre 2025 (28-29 nov)
-  // Serie A: 13, Premier: 13, LaLiga: 14, Bundesliga: 12, Ligue 1: 14
+  // Matchday verificati per inizio dicembre 2025 (5-8 dic) - WEEK 15
+  // Serie A: 14, Premier: 15, LaLiga: 15, Bundesliga: 13, Ligue 1: 15
   const matchdays = {
-    'Serie A': 13,
-    'Premier League': 13,
-    'LaLiga': 14,
-    'Bundesliga': 12,
-    'Ligue 1': 14
+    'Serie A': 14,
+    'Premier League': 15,
+    'LaLiga': 15,
+    'Bundesliga': 13,
+    'Ligue 1': 15
   };
   
-  console.log('📅 Uso matchday verificati per fine novembre 2025:');
+  console.log('📅 Uso matchday verificati per week 15 (5-8 dicembre 2025):');
   for (const [league, md] of Object.entries(matchdays)) {
     console.log(`  ${league}: matchday ${md}`);
   }
