@@ -179,16 +179,16 @@ const FOOTBALL_DATA_CODES = {
 };
 
 // Mappa settimana comune → giornata effettiva per lega
-// Bundesliga e Ligue 1 sono indietro di 1 giornata rispetto alle altre
+// Settimana 14 (28-29 nov): Serie A=13, Premier=13, LaLiga=14, Bundesliga=12, Ligue1=14
 const WEEK_TO_MATCHDAY = {
-  11: { 'Serie A': 11, 'Premier League': 11, 'LaLiga': 11, 'Bundesliga': 10, 'Ligue 1': 10 },
-  12: { 'Serie A': 12, 'Premier League': 12, 'LaLiga': 12, 'Bundesliga': 11, 'Ligue 1': 11 },
-  13: { 'Serie A': 13, 'Premier League': 13, 'LaLiga': 13, 'Bundesliga': 12, 'Ligue 1': 12 },
-  14: { 'Serie A': 14, 'Premier League': 14, 'LaLiga': 14, 'Bundesliga': 13, 'Ligue 1': 13 },
-  15: { 'Serie A': 15, 'Premier League': 15, 'LaLiga': 15, 'Bundesliga': 14, 'Ligue 1': 14 },
-  16: { 'Serie A': 16, 'Premier League': 16, 'LaLiga': 16, 'Bundesliga': 15, 'Ligue 1': 15 },
-  17: { 'Serie A': 17, 'Premier League': 17, 'LaLiga': 17, 'Bundesliga': 16, 'Ligue 1': 16 },
-  18: { 'Serie A': 18, 'Premier League': 18, 'LaLiga': 18, 'Bundesliga': 17, 'Ligue 1': 17 }
+  11: { 'Serie A': 10, 'Premier League': 10, 'LaLiga': 11, 'Bundesliga': 9, 'Ligue 1': 11 },
+  12: { 'Serie A': 11, 'Premier League': 11, 'LaLiga': 12, 'Bundesliga': 10, 'Ligue 1': 12 },
+  13: { 'Serie A': 12, 'Premier League': 12, 'LaLiga': 13, 'Bundesliga': 11, 'Ligue 1': 13 },
+  14: { 'Serie A': 13, 'Premier League': 13, 'LaLiga': 14, 'Bundesliga': 12, 'Ligue 1': 14 },
+  15: { 'Serie A': 14, 'Premier League': 14, 'LaLiga': 15, 'Bundesliga': 13, 'Ligue 1': 15 },
+  16: { 'Serie A': 15, 'Premier League': 15, 'LaLiga': 16, 'Bundesliga': 14, 'Ligue 1': 16 },
+  17: { 'Serie A': 16, 'Premier League': 16, 'LaLiga': 17, 'Bundesliga': 15, 'Ligue 1': 17 },
+  18: { 'Serie A': 17, 'Premier League': 17, 'LaLiga': 18, 'Bundesliga': 16, 'Ligue 1': 18 }
 };
 
 // Mappa delle stagioni per ogni lega (Bundesliga usa 2024, le altre 2025)
