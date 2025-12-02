@@ -178,53 +178,55 @@ const FOOTBALL_DATA_CODES = {
   'Ligue 1': 'FL1',
 };
 
-// Funzione per trovare automaticamente la giornata API per ogni lega in base alla settimana comune
-// Usa i calendari locali invece di fare query API
-async function getMatchdayForWeek(week) {
+// Funzione per trovare automaticamente l'ultima giornata finita per ogni lega
+async function getLastFinishedMatchdayForAllLeagues() {
   const result = {};
   
-  // Data della settimana comune (presa dal primo calendario disponibile)
-  const firstLeague = Object.keys(CALENDARI)[0];
-  const weekEntry = CALENDARI[firstLeague]?.find(g => g.week === week);
-  
-  if (!weekEntry) {
-    console.warn(`⚠️ Settimana ${week} non trovata nei calendari`);
-    // Fallback: usa week per tutte le leghe
-    for (const league of Object.keys(FOOTBALL_DATA_CODES)) {
-      result[league] = week;
-    }
-    return result;
-  }
-  
-  const targetDate = new Date(weekEntry.date);
-  console.log(`📅 Settimana ${week} → ${targetDate.toISOString().split('T')[0]}`);
-  
-  // Per ogni lega, trova la giornata più vicina a quella data
   for (const league of Object.keys(FOOTBALL_DATA_CODES)) {
-    const calendar = CALENDARI[league] || [];
+    const code = FOOTBALL_DATA_CODES[league];
+    const season = LEAGUE_SEASONS[league] || 2025;
     
-    if (calendar.length === 0) {
-      console.warn(`⚠️ Calendario mancante per ${league}`);
-      result[league] = week;
-      continue;
-    }
-    
-    // Trova la giornata con data più vicina a targetDate (±3 giorni)
-    let closestMatchday = week;
-    let minDiff = Infinity;
-    
-    for (const entry of calendar) {
-      const entryDate = new Date(entry.date);
-      const diffDays = Math.abs(entryDate - targetDate) / (1000 * 60 * 60 * 24);
+    try {
+      // Ottieni info sulla competizione per sapere la matchday corrente
+      const compRes = await fetch(`${FOOTBALL_DATA_API}/${code}`, {
+        headers: { 'X-Auth-Token': FOOTBALL_DATA_TOKEN }
+      });
       
-      if (diffDays <= 3 && diffDays < minDiff) {
-        minDiff = diffDays;
-        closestMatchday = entry.week;
+      if (!compRes.ok) {
+        console.warn(`⚠️ ${league}: errore API (${compRes.status}), uso fallback`);
+        result[league] = 13; // Fallback sicuro
+        continue;
       }
+      
+      const compData = await compRes.json();
+      const currentMatchday = compData.currentSeason?.currentMatchday || 14;
+      
+      // Cerca l'ultima giornata con partite finite (partendo dalla currentMatchday e andando indietro)
+      let lastFinished = null;
+      
+      for (let md = currentMatchday; md >= Math.max(1, currentMatchday - 3); md--) {
+        const matchRes = await fetch(`${FOOTBALL_DATA_API}/${code}/matches?matchday=${md}&season=${season}`, {
+          headers: { 'X-Auth-Token': FOOTBALL_DATA_TOKEN }
+        });
+        
+        if (!matchRes.ok) continue;
+        
+        const matchData = await matchRes.json();
+        const finishedMatches = (matchData.matches || []).filter(m => m.status === 'FINISHED');
+        
+        if (finishedMatches.length > 0) {
+          lastFinished = md;
+          console.log(`✅ ${league}: ultima giornata finita = ${md} (${finishedMatches.length} partite)`);
+          break;
+        }
+      }
+      
+      result[league] = lastFinished || currentMatchday - 1;
+      
+    } catch (e) {
+      console.error(`❌ Errore ${league}:`, e.message);
+      result[league] = 13;
     }
-    
-    result[league] = closestMatchday;
-    console.log(`  ${league}: settimana ${week} → matchday ${closestMatchday}`);
   }
   
   return result;
@@ -1573,11 +1575,11 @@ async function updateRankingWithRealResults(week) {
   console.log(`🚀 INIZIO aggiornamento automatico ranking - Settimana ${week}`);
   
   try {
-    // 1. Calcola automaticamente il mapping giornata→matchday per questa settimana
-    console.log(`🔍 Calcolo automatico matchday per settimana ${week}...`);
-    const matchdayMapping = await getMatchdayForWeek(week);
+    // 1. Trova automaticamente l'ultima giornata finita per ogni lega
+    console.log(`🔍 Cerco ultima giornata finita per ogni lega...`);
+    const matchdayMapping = await getLastFinishedMatchdayForAllLeagues();
     
-    // 2. Recupera tutti i risultati della settimana da tutte le leghe
+    // 2. Recupera tutti i risultati da tutte le leghe
     const allResults = {};
     for (const league of Object.keys(FOOTBALL_DATA_CODES)) {
       const leagueResults = await fetchMatchResults(league, week, matchdayMapping);
