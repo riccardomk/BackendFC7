@@ -178,18 +178,75 @@ const FOOTBALL_DATA_CODES = {
   'Ligue 1': 'FL1',
 };
 
-// Mappa settimana comune → giornata effettiva per lega
-// Settimana 14 (28-29 nov): Serie A=13, Premier=13, LaLiga=14, Bundesliga=12, Ligue1=14
-const WEEK_TO_MATCHDAY = {
-  11: { 'Serie A': 10, 'Premier League': 10, 'LaLiga': 11, 'Bundesliga': 9, 'Ligue 1': 11 },
-  12: { 'Serie A': 11, 'Premier League': 11, 'LaLiga': 12, 'Bundesliga': 10, 'Ligue 1': 12 },
-  13: { 'Serie A': 12, 'Premier League': 12, 'LaLiga': 13, 'Bundesliga': 11, 'Ligue 1': 13 },
-  14: { 'Serie A': 13, 'Premier League': 13, 'LaLiga': 14, 'Bundesliga': 12, 'Ligue 1': 14 },
-  15: { 'Serie A': 14, 'Premier League': 14, 'LaLiga': 15, 'Bundesliga': 13, 'Ligue 1': 15 },
-  16: { 'Serie A': 15, 'Premier League': 15, 'LaLiga': 16, 'Bundesliga': 14, 'Ligue 1': 16 },
-  17: { 'Serie A': 16, 'Premier League': 16, 'LaLiga': 17, 'Bundesliga': 15, 'Ligue 1': 17 },
-  18: { 'Serie A': 17, 'Premier League': 17, 'LaLiga': 18, 'Bundesliga': 16, 'Ligue 1': 18 }
-};
+// Funzione per trovare automaticamente la giornata API per ogni lega in base alla settimana comune
+async function getMatchdayForWeek(week) {
+  const result = {};
+  
+  for (const league of Object.keys(FOOTBALL_DATA_CODES)) {
+    const calendar = CALENDARI[league] || [];
+    if (calendar.length === 0) {
+      console.warn(`⚠️ Calendario mancante per ${league}`);
+      result[league] = week; // Fallback: usa la settimana come giornata
+      continue;
+    }
+    
+    // Trova la giornata del calendario che corrisponde alla settimana comune
+    const weekEntry = calendar.find(g => g.week === week);
+    if (!weekEntry) {
+      console.warn(`⚠️ Settimana ${week} non trovata nel calendario ${league}`);
+      result[league] = week;
+      continue;
+    }
+    
+    // Ottieni la data della settimana comune
+    const weekDate = new Date(weekEntry.date);
+    
+    // Cerca nell'API quale matchday si è giocato in quella data
+    try {
+      const code = FOOTBALL_DATA_CODES[league];
+      const season = LEAGUE_SEASONS[league] || 2025;
+      
+      // Prova le giornate vicine (week-2 fino a week+2) per trovare quella giusta
+      let foundMatchday = null;
+      for (let md = Math.max(1, week - 2); md <= week + 2; md++) {
+        const res = await fetch(`${FOOTBALL_DATA_API}/${code}/matches?matchday=${md}&season=${season}`, {
+          headers: { 'X-Auth-Token': FOOTBALL_DATA_TOKEN }
+        });
+        
+        if (!res.ok) continue;
+        
+        const data = await res.json();
+        const matches = data.matches || [];
+        
+        // Verifica se ci sono partite in quella data (±2 giorni)
+        const hasMatchesInWeek = matches.some(m => {
+          const matchDate = new Date(m.utcDate);
+          const diff = Math.abs(matchDate - weekDate) / (1000 * 60 * 60 * 24);
+          return diff <= 2; // Partita entro 2 giorni dalla data della settimana
+        });
+        
+        if (hasMatchesInWeek) {
+          foundMatchday = md;
+          break;
+        }
+      }
+      
+      if (foundMatchday) {
+        result[league] = foundMatchday;
+        console.log(`✅ ${league} settimana ${week} → matchday ${foundMatchday}`);
+      } else {
+        result[league] = week;
+        console.warn(`⚠️ ${league}: nessuna matchday trovata per settimana ${week}, uso ${week}`);
+      }
+      
+    } catch (e) {
+      console.error(`❌ Errore ricerca matchday per ${league}:`, e.message);
+      result[league] = week;
+    }
+  }
+  
+  return result;
+}
 
 // Mappa delle stagioni per ogni lega (Bundesliga usa 2024, le altre 2025)
 const LEAGUE_SEASONS = {
@@ -1474,12 +1531,12 @@ function normalizeTeamName(apiName) {
 }
 
 // Funzione per recuperare risultati di una giornata specifica
-async function fetchMatchResults(league, matchday) {
+async function fetchMatchResults(league, matchday, matchdayMapping = null) {
   const code = FOOTBALL_DATA_CODES[league];
   if (!code) return {};
   
-  // Usa la mappa WEEK_TO_MATCHDAY per convertire settimana in giornata specifica
-  const actualMatchday = WEEK_TO_MATCHDAY[matchday]?.[league] || matchday;
+  // Usa il mapping fornito o fallback a matchday
+  const actualMatchday = matchdayMapping?.[league] || matchday;
   const season = LEAGUE_SEASONS[league] || 2025;
   
   try {
@@ -1534,10 +1591,14 @@ async function updateRankingWithRealResults(week) {
   console.log(`🚀 INIZIO aggiornamento automatico ranking - Settimana ${week}`);
   
   try {
-    // 1. Recupera tutti i risultati della settimana da tutte le leghe
+    // 1. Calcola automaticamente il mapping giornata→matchday per questa settimana
+    console.log(`🔍 Calcolo automatico matchday per settimana ${week}...`);
+    const matchdayMapping = await getMatchdayForWeek(week);
+    
+    // 2. Recupera tutti i risultati della settimana da tutte le leghe
     const allResults = {};
     for (const league of Object.keys(FOOTBALL_DATA_CODES)) {
-      const leagueResults = await fetchMatchResults(league, week);
+      const leagueResults = await fetchMatchResults(league, week, matchdayMapping);
       Object.assign(allResults, leagueResults);
     }
     
@@ -1548,7 +1609,7 @@ async function updateRankingWithRealResults(week) {
     
     console.log(`📊 Risultati recuperati: ${Object.keys(allResults).length} squadre`);
     
-    // 2. Carica tutte le formazioni confermate da MongoDB per questa settimana
+    // 3. Carica tutte le formazioni confermate da MongoDB per questa settimana
     const db = await connectMongo();
     const formations = await db.collection('formations').find({ 
       confirmed: true,
