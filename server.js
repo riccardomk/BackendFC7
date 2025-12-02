@@ -179,70 +179,52 @@ const FOOTBALL_DATA_CODES = {
 };
 
 // Funzione per trovare automaticamente la giornata API per ogni lega in base alla settimana comune
+// Usa i calendari locali invece di fare query API
 async function getMatchdayForWeek(week) {
   const result = {};
   
+  // Data della settimana comune (presa dal primo calendario disponibile)
+  const firstLeague = Object.keys(CALENDARI)[0];
+  const weekEntry = CALENDARI[firstLeague]?.find(g => g.week === week);
+  
+  if (!weekEntry) {
+    console.warn(`⚠️ Settimana ${week} non trovata nei calendari`);
+    // Fallback: usa week per tutte le leghe
+    for (const league of Object.keys(FOOTBALL_DATA_CODES)) {
+      result[league] = week;
+    }
+    return result;
+  }
+  
+  const targetDate = new Date(weekEntry.date);
+  console.log(`📅 Settimana ${week} → ${targetDate.toISOString().split('T')[0]}`);
+  
+  // Per ogni lega, trova la giornata più vicina a quella data
   for (const league of Object.keys(FOOTBALL_DATA_CODES)) {
     const calendar = CALENDARI[league] || [];
+    
     if (calendar.length === 0) {
       console.warn(`⚠️ Calendario mancante per ${league}`);
-      result[league] = week; // Fallback: usa la settimana come giornata
-      continue;
-    }
-    
-    // Trova la giornata del calendario che corrisponde alla settimana comune
-    const weekEntry = calendar.find(g => g.week === week);
-    if (!weekEntry) {
-      console.warn(`⚠️ Settimana ${week} non trovata nel calendario ${league}`);
       result[league] = week;
       continue;
     }
     
-    // Ottieni la data della settimana comune
-    const weekDate = new Date(weekEntry.date);
+    // Trova la giornata con data più vicina a targetDate (±3 giorni)
+    let closestMatchday = week;
+    let minDiff = Infinity;
     
-    // Cerca nell'API quale matchday si è giocato in quella data
-    try {
-      const code = FOOTBALL_DATA_CODES[league];
-      const season = LEAGUE_SEASONS[league] || 2025;
+    for (const entry of calendar) {
+      const entryDate = new Date(entry.date);
+      const diffDays = Math.abs(entryDate - targetDate) / (1000 * 60 * 60 * 24);
       
-      // Prova le giornate vicine (week-2 fino a week+2) per trovare quella giusta
-      let foundMatchday = null;
-      for (let md = Math.max(1, week - 2); md <= week + 2; md++) {
-        const res = await fetch(`${FOOTBALL_DATA_API}/${code}/matches?matchday=${md}&season=${season}`, {
-          headers: { 'X-Auth-Token': FOOTBALL_DATA_TOKEN }
-        });
-        
-        if (!res.ok) continue;
-        
-        const data = await res.json();
-        const matches = data.matches || [];
-        
-        // Verifica se ci sono partite in quella data (±2 giorni)
-        const hasMatchesInWeek = matches.some(m => {
-          const matchDate = new Date(m.utcDate);
-          const diff = Math.abs(matchDate - weekDate) / (1000 * 60 * 60 * 24);
-          return diff <= 2; // Partita entro 2 giorni dalla data della settimana
-        });
-        
-        if (hasMatchesInWeek) {
-          foundMatchday = md;
-          break;
-        }
+      if (diffDays <= 3 && diffDays < minDiff) {
+        minDiff = diffDays;
+        closestMatchday = entry.week;
       }
-      
-      if (foundMatchday) {
-        result[league] = foundMatchday;
-        console.log(`✅ ${league} settimana ${week} → matchday ${foundMatchday}`);
-      } else {
-        result[league] = week;
-        console.warn(`⚠️ ${league}: nessuna matchday trovata per settimana ${week}, uso ${week}`);
-      }
-      
-    } catch (e) {
-      console.error(`❌ Errore ricerca matchday per ${league}:`, e.message);
-      result[league] = week;
     }
+    
+    result[league] = closestMatchday;
+    console.log(`  ${league}: settimana ${week} → matchday ${closestMatchday}`);
   }
   
   return result;
