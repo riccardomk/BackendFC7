@@ -182,13 +182,13 @@ const FOOTBALL_DATA_CODES = {
 // Usa matchday fissi verificati per evitare rate limiting
 async function getLastFinishedMatchdayForAllLeagues() {
   // Matchday verificati per fine novembre 2025 (28-29 nov)
-  // Serie A: 13, Premier: 13, LaLiga: 14, Bundesliga: 12, Ligue 1: 13 (NON 14!)
+  // Serie A: 13, Premier: 13, LaLiga: 14, Bundesliga: 12, Ligue 1: 14
   const matchdays = {
     'Serie A': 13,
     'Premier League': 13,
     'LaLiga': 14,
     'Bundesliga': 12,
-    'Ligue 1': 13
+    'Ligue 1': 14
   };
   
   console.log('📅 Uso matchday verificati per fine novembre 2025:');
