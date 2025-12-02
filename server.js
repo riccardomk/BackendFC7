@@ -380,7 +380,7 @@ async function getNextCommonWeekAndFirstMatch() {
           }
         }
         
-        await new Promise(resolve => setTimeout(resolve, 200));
+        await new Promise(resolve => setTimeout(resolve, 1000));
       } catch (error) {
         console.error(`Errore fetch prossima giornata ${league}:`, error.message);
       }
@@ -2334,7 +2334,7 @@ async function checkAndUpdateRankingAutomatically() {
           }
         }
         
-        await new Promise(resolve => setTimeout(resolve, 200));
+        await new Promise(resolve => setTimeout(resolve, 1000));
         
       } catch (error) {
         console.error(`❌ Errore check ${league}:`, error.message);
