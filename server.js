@@ -181,7 +181,7 @@ const FOOTBALL_DATA_CODES = {
   'Ligue 1': 'FL1',
 };
 
-// Funzione per trovare automaticamente l'ultima giornata finita per ogni lega
+// Funzione per trovare la PROSSIMA giornata comune schedulata (non quella finita!)
 async function getLastFinishedMatchdayForAllLeagues() {
   const leagueCodes = {
     'Serie A': 'SA',
@@ -194,13 +194,13 @@ async function getLastFinishedMatchdayForAllLeagues() {
   const matchdays = {};
   const now = new Date();
   
-  console.log('🔍 Rilevo automaticamente l\'ultima giornata finita per ogni lega...');
+  console.log('🔍 Rilevo la PROSSIMA giornata comune schedulata...');
   
   for (const [league, code] of Object.entries(leagueCodes)) {
     try {
-      // Prendo le ultime partite finite
+      // Prendo le prossime partite SCHEDULED
       const response = await fetch(
-        `https://api.football-data.org/v4/competitions/${code}/matches?status=FINISHED`,
+        `https://api.football-data.org/v4/competitions/${code}/matches?status=SCHEDULED`,
         { headers: { 'X-Auth-Token': FOOTBALL_API_TOKEN } }
       );
       
@@ -211,7 +211,7 @@ async function getLastFinishedMatchdayForAllLeagues() {
       
       const data = await response.json();
       
-      // Trova l'ultima giornata con tutte le partite finite
+      // Trova la prima giornata con partite future
       const matchesByMatchday = {};
       data.matches.forEach(match => {
         if (!matchesByMatchday[match.matchday]) {
@@ -220,13 +220,13 @@ async function getLastFinishedMatchdayForAllLeagues() {
         matchesByMatchday[match.matchday].push(match);
       });
       
-      // Prendi la giornata più alta che ha tutte le partite finite
-      const completedMatchdays = Object.keys(matchesByMatchday)
+      // Prendi il matchday più basso con partite scheduled (la prossima)
+      const scheduledMatchdays = Object.keys(matchesByMatchday)
         .map(Number)
-        .sort((a, b) => b - a);
+        .sort((a, b) => a - b);
       
-      if (completedMatchdays.length > 0) {
-        matchdays[league] = completedMatchdays[0];
+      if (scheduledMatchdays.length > 0) {
+        matchdays[league] = scheduledMatchdays[0];
         console.log(`  ✅ ${league}: matchday ${matchdays[league]}`);
       }
       
@@ -241,7 +241,7 @@ async function getLastFinishedMatchdayForAllLeagues() {
   // Se non ho trovato dati per qualche lega, uso fallback
   if (Object.keys(matchdays).length < 5) {
     console.warn('⚠️ Non ho trovato tutti i matchday, uso fallback settimana corrente');
-    // Fallback ai valori correnti
+    // Fallback ai valori della prossima settimana comune (week 15)
     return {
       'Serie A': matchdays['Serie A'] || 14,
       'Premier League': matchdays['Premier League'] || 15,
@@ -251,7 +251,7 @@ async function getLastFinishedMatchdayForAllLeagues() {
     };
   }
   
-  console.log('✅ Matchday rilevati automaticamente!');
+  console.log('✅ Prossima giornata comune rilevata!');
   return matchdays;
 }
 
