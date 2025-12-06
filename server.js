@@ -1333,67 +1333,6 @@ app.get('/formation/:userId', async (req, res) => {
   }
 });
 
-// Route GET per recuperare i risultati delle ultime partite (matchday corrente)
-app.get('/results/latest', async (req, res) => {
-  try {
-    // Ottieni la prossima settimana comune e relativa giornata
-    const { week, firstMatchday, firstMatchdayArray } = await getNextCommonWeekAndFirstMatch();
-    
-    if (!week) {
-      return res.status(400).json({ error: 'Nessuna settimana comune trovata per i risultati' });
-    }
-
-    // Raccogli i risultati da tutte le leghe per questa giornata
-    const allResults = {};
-    
-    // Mappa delle leghe e dei loro codici
-    const leagues = [
-      { code: 'sa', name: 'Serie A', file: 'backend/calendar-seriea.json' },
-      { code: 'pl', name: 'Premier League', file: 'backend/calendar-premier.json' },
-      { code: 'pd', name: 'La Liga', file: 'backend/calendar-laliga.json' },
-      { code: 'l1', name: 'Ligue 1', file: 'backend/calendar-ligue1.json' },
-      { code: 'bl1', name: 'Bundesliga', file: 'backend/calendar-bundesliga.json' }
-    ];
-
-    // Carica le mappature delle giornate per ogni lega
-    let matchdayMapping = {};
-    for (const league of leagues) {
-      try {
-        const calendarPath = path.join(process.cwd(), league.file);
-        const calendarData = JSON.parse(fs.readFileSync(calendarPath, 'utf8'));
-        if (calendarData.matchdayMapping) {
-          matchdayMapping[league.code] = calendarData.matchdayMapping;
-        }
-      } catch (e) {
-        console.warn(`⚠️ Impossibile caricare calendario ${league.name}:`, e.message);
-      }
-    }
-
-    // Scarica i risultati per ogni lega
-    for (const league of leagues) {
-      const leagueMatchday = firstMatchdayArray?.find(m => m.league === league.code)?.matchday || firstMatchday;
-      console.log(`📊 Recuperando risultati ${league.name} giornata ${leagueMatchday}...`);
-      
-      try {
-        const leagueResults = await fetchMatchResults(league.code, leagueMatchday, matchdayMapping[league.code]);
-        Object.assign(allResults, leagueResults);
-      } catch (error) {
-        console.warn(`⚠️ Errore nel recuperare risultati ${league.name}:`, error.message);
-      }
-    }
-
-    res.json({
-      week: week,
-      matchday: firstMatchday,
-      results: allResults,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('Errore recupero risultati:', error);
-    res.status(500).json({ error: 'Errore nel recupero dei risultati', details: error.message });
-  }
-});
-
 // ===== SISTEMA AUTOMAZIONE RISULTATI REALI =====
 // Mappa nomi vecchi/italiani usati nel MongoDB → nomi ufficiali API
 const OLD_NAMES_MAPPING = {
