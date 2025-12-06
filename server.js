@@ -1238,7 +1238,7 @@ app.post('/formation/:userId', async (req, res) => {
       return res.status(400).json({ error: 'Dati formazione non validi (serve 11 titolari)' });
     }
     // --- LOGICA BLOCCO FORMAZIONE: SOLO SE TUTTI I CAMPIONATI HANNO UNA GIORNATA (SETTIMANA COMUNE) ---
-    const next = getNextCommonWeekAndFirstMatch();
+    const next = await getNextCommonWeekAndFirstMatch();
     if (!next) {
       return res.status(403).json({ error: 'Non tutti i campionati hanno una giornata attiva questa settimana.' });
     }
@@ -1279,8 +1279,8 @@ app.post('/formation/:userId', async (req, res) => {
 
 
 // Route GET per la deadline della formazione (prossima settimana comune e deadline invio)
-app.get('/formation/deadline', (req, res) => {
-  const next = getNextCommonWeekAndFirstMatch();
+app.get('/formation/deadline', async (req, res) => {
+  const next = await getNextCommonWeekAndFirstMatch();
   if (!next) {
     return res.json({ deadline: null, week: null });
   }
@@ -1912,7 +1912,7 @@ app.post('/admin/clean-user-data/:username', async (req, res) => {
 app.post('/admin/auto-update-current-week', async (req, res) => {
   try {
     // Trova la settimana comune corrente
-    const next = getNextCommonWeekAndFirstMatch();
+    const next = await getNextCommonWeekAndFirstMatch();
     if (!next) {
       return res.status(400).json({ error: 'Nessuna settimana comune disponibile' });
     }
@@ -2109,9 +2109,9 @@ app.post('/admin/reset-stagione', async (req, res) => {
 // ===== AVVIO SERVER =====
 
 // ===== LOGICA NOTIFICHE AUTOMATICHE (calcolo date/orari chiave) =====
-function getNotificationSchedule() {
+async function getNotificationSchedule() {
   // Calcola date/orari per notifiche formazione
-  const nextFormation = getNextCommonWeekAndFirstMatch();
+  const nextFormation = await getNextCommonWeekAndFirstMatch();
   let formationNotifications = [];
   if (nextFormation && nextFormation.firstMatch) {
     const firstMatch = nextFormation.firstMatch;
@@ -2155,7 +2155,7 @@ function getNotificationSchedule() {
 // ===== ROUTINE INVIO NOTIFICHE PUSH =====
 async function notificationRoutine() {
   const now = new Date();
-  const { formationNotifications, mercatoNotifications } = getNotificationSchedule();
+  const { formationNotifications, mercatoNotifications } = await getNotificationSchedule();
   // Recupera tutti gli utenti e i loro token push (da DB)
   const db = await connectMongo();
   const users = await db.collection('users').find({ fcmToken: { $exists: true } }).toArray();
@@ -2241,7 +2241,7 @@ app.get('/admin/formations/debug', async (req, res) => {
 // ===== AUTOMAZIONE RANKING SETTIMANALE =====
 async function autoUpdateRankingRoutine() {
   try {
-    const next = getNextCommonWeekAndFirstMatch();
+    const next = await getNextCommonWeekAndFirstMatch();
     if (!next) return;
     
     const now = new Date();
