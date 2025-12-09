@@ -408,13 +408,21 @@ async function getNextCommonWeekAndFirstMatch() {
         if (response.ok) {
           const data = await response.json();
           if (data.matches && data.matches.length > 0) {
-            const firstMatch = data.matches.sort((a, b) => 
-              new Date(a.utcDate) - new Date(b.utcDate)
-            )[0];
+            // FILTRO DOPPIO: assicurati che siano SOLO della giornata richiesta
+            const filteredMatches = data.matches.filter(m => m.matchday === nextMatchday);
             
-            const matchDate = new Date(firstMatch.utcDate);
-            if (!firstMatchDate || matchDate < firstMatchDate) {
-              firstMatchDate = matchDate;
+            if (filteredMatches.length > 0) {
+              console.log(`   ✅ ${league} matchday ${nextMatchday}: ${filteredMatches.length} partite`);
+              const firstMatch = filteredMatches.sort((a, b) => 
+                new Date(a.utcDate) - new Date(b.utcDate)
+              )[0];
+              
+              const matchDate = new Date(firstMatch.utcDate);
+              if (!firstMatchDate || matchDate < firstMatchDate) {
+                firstMatchDate = matchDate;
+              }
+            } else {
+              console.warn(`   ⚠️ ${league} matchday ${nextMatchday}: API ritornò ${data.matches.length} ma NESSUNA della giornata richiesta!`);
             }
           }
         }
@@ -2424,6 +2432,54 @@ setInterval(checkAndUpdateRankingAutomatically, 60 * 60 * 1000);
 
 // Primo controllo dopo 5 minuti dall'avvio
 setTimeout(checkAndUpdateRankingAutomatically, 5 * 60 * 1000);
+
+// ===== ENDPOINT TEST: VERIFICA MATCH SINGOLO CAMPIONATO =====
+app.get('/test/matches/:league', async (req, res) => {
+  const leagueCodes = {
+    'seriea': 'SA',
+    'premier': 'PL',
+    'laliga': 'PD',
+    'bundesliga': 'BL1',
+    'ligue1': 'FL1'
+  };
+  
+  const code = leagueCodes[req.params.league.toLowerCase()];
+  if (!code) return res.status(400).json({ error: 'Campionato non trovato' });
+  
+  try {
+    // Rileva la prossima giornata
+    const response = await fetch(
+      `https://api.football-data.org/v4/competitions/${code}/matches?status=SCHEDULED`,
+      { headers: { 'X-Auth-Token': FOOTBALL_API_TOKEN } }
+    );
+    
+    const data = await response.json();
+    const byMatchday = {};
+    
+    data.matches.forEach(m => {
+      if (!byMatchday[m.matchday]) byMatchday[m.matchday] = [];
+      byMatchday[m.matchday].push({
+        homeTeam: m.homeTeam.name,
+        awayTeam: m.awayTeam.name,
+        date: m.utcDate
+      });
+    });
+    
+    const matchdays = Object.keys(byMatchday).map(Number).sort((a, b) => a - b);
+    
+    res.json({
+      league: req.params.league,
+      code: code,
+      allScheduledMatchdays: matchdays.slice(0, 5),
+      nextMatchday: matchdays[0],
+      matchesInNextMatchday: byMatchday[matchdays[0]]?.length || 0,
+      matches: byMatchday[matchdays[0]] || [],
+      apiToken: `${FOOTBALL_API_TOKEN.substring(0, 8)}...`
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 const PORT = process.env.PORT || 1000;
 app.listen(PORT, () => {
