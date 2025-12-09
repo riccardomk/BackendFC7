@@ -206,17 +206,21 @@ async function getLastFinishedMatchdayForAllLeagues() {
   const now = new Date();
   
   console.log('🔍 Rilevo la PROSSIMA giornata comune schedulata (chiamata API)...');
+  console.log(`   Token API usato: ${FOOTBALL_API_TOKEN.substring(0, 8)}...`);
   
   for (const [league, code] of Object.entries(leagueCodes)) {
     try {
       // Prendo le prossime partite SCHEDULED
+      console.log(`   📍 Fetching ${league}...`);
       const response = await fetch(
         `https://api.football-data.org/v4/competitions/${code}/matches?status=SCHEDULED`,
         { headers: { 'X-Auth-Token': FOOTBALL_API_TOKEN } }
       );
       
       if (!response.ok) {
-        console.error(`❌ Errore API per ${league}: ${response.status}`);
+        console.error(`   ❌ Errore API per ${league}: ${response.status} ${response.statusText}`);
+        const body = await response.text();
+        console.error(`      Risposta: ${body.substring(0, 150)}`);
         continue;
       }
       
@@ -238,20 +242,23 @@ async function getLastFinishedMatchdayForAllLeagues() {
       
       if (scheduledMatchdays.length > 0) {
         matchdays[league] = scheduledMatchdays[0];
-        console.log(`  ✅ ${league}: matchday ${matchdays[league]}`);
+        console.log(`   ✅ ${league}: matchday ${matchdays[league]} (${matchesByMatchday[scheduledMatchdays[0]].length} partite)`);
+      } else {
+        console.warn(`   ⚠️ ${league}: nessun matchday trovato`);
       }
       
       // Pausa più lunga per evitare rate limiting (1 secondo)
       await new Promise(resolve => setTimeout(resolve, 1000));
       
     } catch (error) {
-      console.error(`❌ Errore rilevamento ${league}:`, error.message);
+      console.error(`   ❌ Errore rilevamento ${league}:`, error.message);
     }
   }
   
   // Se non ho trovato dati per qualche lega, uso fallback
   if (Object.keys(matchdays).length < 5) {
     console.warn('⚠️ Non ho trovato tutti i matchday, uso fallback settimana corrente');
+    console.warn(`   Trovati: ${Object.keys(matchdays).join(', ')}`);
     // Fallback ai valori della prossima settimana comune (week 15)
     const fallback = {
       'Serie A': matchdays['Serie A'] || 14,
@@ -285,15 +292,28 @@ const LEAGUE_SEASONS = {
 };
 async function fetchCalendar(league, file) {
   const code = FOOTBALL_DATA_CODES[league];
-  if (!code) return [];
+  if (!code) {
+    console.warn(`❌ Codice lega non trovato per: ${league}`);
+    return [];
+  }
   try {
+    console.log(`🔄 Fetching calendario ${league} (codice: ${code}, token: ${FOOTBALL_API_TOKEN.substring(0, 8)}...)`);
     const res = await fetch(`${FOOTBALL_DATA_API}/${code}/matches?season=2025`, {
       headers: { 'X-Auth-Token': FOOTBALL_API_TOKEN }
     });
-    if (!res.ok) throw new Error('API error');
+    
+    if (!res.ok) {
+      console.error(`❌ Errore API ${league}: ${res.status} ${res.statusText}`);
+      const body = await res.text();
+      console.error(`   Risposta: ${body.substring(0, 100)}`);
+      throw new Error(`API error: ${res.status}`);
+    }
+    
     const data = await res.json();
     // Estrarre week e date
     const matches = data.matches || [];
+    console.log(`✅ ${league}: ricevute ${matches.length} partite`);
+    
     // Raggruppa per giornata
     const byWeek = {};
     for (const m of matches) {
@@ -307,9 +327,10 @@ async function fetchCalendar(league, file) {
     }));
     // Salva su file
     fs.writeFileSync(file, JSON.stringify(result, null, 2));
+    console.log(`💾 Calendario salvato: ${file} (${result.length} giornate)`);
     return result;
   } catch (e) {
-    console.error('Errore fetch calendario', league, e.message);
+    console.error(`❌ Errore fetch calendario ${league}:`, e.message);
     return [];
   }
 }
