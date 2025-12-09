@@ -283,14 +283,12 @@ const LEAGUE_SEASONS = {
   'Bundesliga': 2025,
   'Ligue 1': 2025
 };
-
-const FOOTBALL_DATA_TOKEN = process.env.FOOTBALL_DATA_TOKEN || '81ed2d1e396e4164b91e079b249038df';
 async function fetchCalendar(league, file) {
   const code = FOOTBALL_DATA_CODES[league];
   if (!code) return [];
   try {
     const res = await fetch(`${FOOTBALL_DATA_API}/${code}/matches?season=2025`, {
-      headers: { 'X-Auth-Token': FOOTBALL_DATA_TOKEN }
+      headers: { 'X-Auth-Token': FOOTBALL_API_TOKEN }
     });
     if (!res.ok) throw new Error('API error');
     const data = await res.json();
@@ -991,7 +989,7 @@ function isMercatoOpen(now = new Date()) {
     for (const code of LEAGUE_CODES) {
       try {
         const res = await fetch(`${FOOTBALL_DATA_API}/${code}/standings?season=2025`, {
-          headers: { 'X-Auth-Token': FOOTBALL_DATA_TOKEN }
+          headers: { 'X-Auth-Token': FOOTBALL_API_TOKEN }
         });
         
         if (!res.ok) continue;
@@ -1608,7 +1606,7 @@ async function fetchMatchResults(league, matchday, matchdayMapping = null) {
   try {
     console.log(`🔄 Recupero risultati ${league} - Settimana ${matchday} → Giornata ${actualMatchday} (Stagione ${season})`);
     const res = await fetch(`${FOOTBALL_DATA_API}/${code}/matches?matchday=${actualMatchday}&season=${season}`, {
-      headers: { 'X-Auth-Token': FOOTBALL_DATA_TOKEN }
+      headers: { 'X-Auth-Token': FOOTBALL_API_TOKEN }
     });
     
     if (!res.ok) {
@@ -2071,7 +2069,7 @@ app.post('/admin/reset-stagione', async (req, res) => {
     let squadreMassimaLega = [];
     for (const code of LEAGUE_CODES) {
       const url = `https://api.football-data.org/v4/competitions/${code}/teams?season=${year}`;
-      const res = await fetch(url, { headers: { 'X-Auth-Token': FOOTBALL_DATA_TOKEN } });
+      const res = await fetch(url, { headers: { 'X-Auth-Token': FOOTBALL_API_TOKEN } });
       if (res.ok) {
         const data = await res.json();
         const teams = data.teams.map(t => t.name);
